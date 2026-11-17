@@ -1,0 +1,80 @@
+[project]
+name = "homevaluenavigator"
+version = "1.0.0"
+description = "Estimates Bengaluru home prices from a linear model, through a Flask API or in the browser."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Vara Prasad Chilakanti" }]
+dependencies = ["flask>=3.1"]
+
+[dependency-groups]
+# Training needs the data stack; serving a prediction does not.
+train = ["numpy>=2.1", "pandas>=2.2", "scikit-learn>=1.5"]
+dev = [
+    { include-group = "train" },
+    "mypy>=1.13",
+    "pandas-stubs>=2.2",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv]
+required-version = ">=0.13"
+default-groups = ["dev"]
+
+[tool.uv.build-backend]
+module-name = "homevalue"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+# The 2024 notebook is kept as it was written; train.py is the maintained source.
+extend-exclude = ["notebooks"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "C", "B", "UP", "N", "SIM", "D", "RUF", "TD", "BLE", "ERA",
+    "S110", "S602", "S604", "S105", "S106", "S107",
+    "PLW0602", "PLW0603", "PLW1508", "G004", "LOG015",
+]
+ignore = [
+    "D203", "D213",  # pydocstyle: the Google convention below picks one of each pair
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]  # test names say what each test checks
+
+[tool.mypy]
+strict = true
+warn_unused_ignores = true
+warn_return_any = true
+
+[[tool.mypy.overrides]]
+# scikit-learn ships no type information; only train.py imports it.
+module = ["sklearn", "sklearn.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+
+[tool.coverage.run]
+source = ["homevalue"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
