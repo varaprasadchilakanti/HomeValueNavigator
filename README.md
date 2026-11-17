@@ -6,8 +6,12 @@ the range half of its estimates fall within. A codebasics course project from 20
 in 2026 with a measured model, tests and CI.
 
 [![CI](https://github.com/varaprasadchilakanti/HomeValueNavigator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/varaprasadchilakanti/HomeValueNavigator/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue)](pyproject.toml)
+[![Live page](https://img.shields.io/badge/live-GitHub%20Pages-2f3a8f)](https://varaprasadchilakanti.github.io/HomeValueNavigator/client/app.html)
+[![Python 3.11 | 3.13](https://img.shields.io/badge/python-3.11%20%7C%203.13-2f3a8f)](pyproject.toml)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
+[![Checked with mypy](https://img.shields.io/badge/mypy-strict-2f3a8f)](https://mypy-lang.org/)
+[![Coverage floor 90%](https://img.shields.io/badge/coverage%20floor-90%25-2f3a8f)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2f3a8f)](LICENSE)
 
 **[Open the estimator](https://varaprasadchilakanti.github.io/HomeValueNavigator/client/app.html).**
 It runs in your browser from the model's published weights; nothing you enter leaves the page.
@@ -83,7 +87,7 @@ Measured on x86-64, 2 cores, Python 3.12 (`uv run python scripts/measure.py`):
 
 | | |
 |---|---|
-| Page a visitor downloads | 32.4 KiB in 4 files (12.3 KiB gzipped); no third-party scripts, fonts or images |
+| Page a visitor downloads | 33.6 KiB in 6 files (12.9 KiB gzipped); no third-party scripts, fonts or images |
 | One prediction | 24 us median, in process |
 | One API request | 1.8 ms median, Flask test client, no network |
 | Training | 10.3 s, peak 228 MiB |

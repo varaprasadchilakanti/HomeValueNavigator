@@ -11,6 +11,7 @@ const ANNOUNCE_DELAY_MS = 500;
 const RUPEE = "\u20B9";
 const DASH = "\u2013";
 const OTHER = "other";
+const LAKH = 100000;
 
 const byId = (id) => document.getElementById(id);
 const key = (name) => name.trim().split(/\s+/).join(" ").toLowerCase();
@@ -140,9 +141,10 @@ function main() {
         return null;
     }
 
-    function show(price, range, spoken) {
+    function show(price, range, spoken, perSqft = "") {
         byId("price").textContent = price;
         byId("range").textContent = range;
+        byId("per-sqft").textContent = perSqft;
         clearTimeout(announceTimer);
         announceTimer = setTimeout(() => { byId("announce").textContent = spoken; }, ANNOUNCE_DELAY_MS);
     }
@@ -159,8 +161,10 @@ function main() {
         const price = model.estimate(sqft, bhk, chosen("bath"), place);
         const low = price * (1 - model.within);
         const high = price * (1 + model.within);
+        const rate = Math.round((price * LAKH) / sqft).toLocaleString("en-IN");
         return show(money(price), `Likely ${span(low, high)}`,
-            `Estimated ${money(price)}, likely between ${money(low)} and ${money(high)}.`);
+            `Estimated ${money(price)}, likely between ${money(low)} and ${money(high)}.`,
+            `About ${RUPEE}${rate} per sq ft`);
     }
 
     // ---- location search: the WAI-ARIA combobox pattern, so the list follows the theme

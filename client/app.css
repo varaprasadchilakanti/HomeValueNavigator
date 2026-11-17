@@ -231,6 +231,7 @@ input:-webkit-autofill {
     font-variant-numeric: tabular-nums;
 }
 .range { margin: 0; font-weight: 500; min-height: 1.55em; }
+.per-sqft { margin: 2px 0 0; font-size: 0.9rem; color: var(--muted); min-height: 1.4em; font-variant-numeric: tabular-nums; }
 .accuracy {
     margin: 18px 0 14px;
     padding-top: 16px;

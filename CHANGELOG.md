@@ -9,7 +9,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - A seeded training script, replacing the notebook as the model's source.
 - The typical accuracy beside every estimate, as a likely range.
 - The page estimates in the browser, so the GitHub Pages link works without a server.
-- Light, dark and system themes, a searchable location list, and accessible errors.
+- Light, dark and system themes, a searchable location list, accessible errors, the price
+  per sq ft, a favicon and a Content Security Policy.
 - Tests, type checks, a 90% coverage floor, CI, Dependabot and `scripts/measure.py`.
 
 ### Changed

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!-- SPDX-License-Identifier: MIT -->
-<html lang="en">
+<html lang="en-IN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,13 +9,16 @@
     <meta name="theme-color" content="#0c1024" media="(prefers-color-scheme: dark)">
     <meta name="description" content="Estimate a Bengaluru home price from area, bedrooms, bathrooms and location.">
     <title>HomeValueNavigator</title>
-    <script>
-        // Apply a saved theme before the first paint, so the page does not flash.
-        try {
-            const saved = localStorage.getItem("theme");
-            if (saved === "light" || saved === "dark") document.documentElement.dataset.theme = saved;
-        } catch { /* storage blocked: follow the system setting */ }
-    </script>
+    <!-- Only this site's own files may load. file: keeps the page working opened from disk,
+         where some browsers do not count the page's own folder as 'self'. -->
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'none'; script-src 'self' file:; style-src 'self' file:; img-src 'self' file:; base-uri 'none'; form-action 'none'">
+    <meta name="referrer" content="no-referrer">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="HomeValueNavigator">
+    <meta property="og:description" content="Estimate a Bengaluru home price from area, bedrooms, bathrooms and location.">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <script src="theme.js"></script>
     <link rel="stylesheet" href="app.css">
 </head>
 <body>
@@ -82,6 +85,7 @@
         <p class="result-label">Estimated price</p>
         <p id="price" class="price">--</p>
         <p id="range" class="range">Choose a location to see an estimate.</p>
+        <p id="per-sqft" class="per-sqft"></p>
         <p id="accuracy" class="accuracy"></p>
         <a class="method" href="https://github.com/varaprasadchilakanti/HomeValueNavigator#model-card">How this is estimated</a>
         <p id="announce" class="sr-only" aria-live="polite" aria-atomic="true"></p>
