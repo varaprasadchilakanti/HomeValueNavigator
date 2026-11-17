@@ -1,7 +1,7 @@
 [project]
 name = "homevaluenavigator"
-version = "1.0.0"
-description = "Estimates Bengaluru home prices from a linear model, through a Flask API or in the browser."
+version = "0.2.0.dev0"
+description = "Bengaluru home price estimates from a log-linear model, in the browser or over HTTP."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -9,9 +9,16 @@ requires-python = ">=3.11"
 authors = [{ name = "Vara Prasad Chilakanti" }]
 dependencies = ["flask>=3.1"]
 
+[project.urls]
+Homepage = "https://varaprasadchilakanti.github.io/HomeValueNavigator/client/app.html"
+Source = "https://github.com/varaprasadchilakanti/HomeValueNavigator"
+Changelog = "https://github.com/varaprasadchilakanti/HomeValueNavigator/blob/main/CHANGELOG.md"
+
 [dependency-groups]
 # Training needs the data stack; serving a prediction does not.
 train = ["numpy>=2.1", "pandas>=2.2", "scikit-learn>=1.5"]
+# A production WSGI server; waitress runs on Linux, macOS and Windows alike.
+serve = ["waitress>=3.0"]
 dev = [
     { include-group = "train" },
     "mypy>=1.13",
@@ -46,6 +53,7 @@ select = [
 ]
 ignore = [
     "D203", "D213",  # pydocstyle: the Google convention below picks one of each pair
+    "TD002", "TD003",  # a TODO names its reason, not an author or an issue link
 ]
 
 [tool.ruff.lint.mccabe]
