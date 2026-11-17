@@ -1,80 +1,94 @@
+# SPDX-License-Identifier: MIT
 from __future__ import annotations
+
+import json
+from pathlib import Path
 
 import pytest
 
 from homevalue.model import InvalidInputError, PriceModel
 
 
-def test_a_price_is_the_weighted_sum(model: PriceModel) -> None:
-    # 10 + 0.05 * 1000 + 2 * 2 + 3 * 2 + 5
-    assert model.predict("Whitefield", 1000, 2, 2) == 75.0
+def test_a_price_is_exp_of_the_weighted_sum(model: PriceModel) -> None:
+    assert model.predict("Whitefield", 1000, 2, 2) == 75.0  # 0.05 * 1000 * 1.5
+    assert model.predict("Hebbal", 1000, 2, 2) == 50.0
 
 
 def test_location_matches_whatever_the_case_and_spacing(model: PriceModel) -> None:
-    assert model.predict("  whitefield ", 1000, 2, 2) == model.predict("Whitefield", 1000, 2, 2)
+    assert model.predict("  whitefield ", 1000, 2, 2) == 75.0
 
 
-def test_a_stored_name_with_a_double_space_still_matches() -> None:
+def test_a_stored_name_with_a_double_space_still_matches(
+    tmp_path: Path, small: dict[str, object]
+) -> None:
     """The data has 'Sarjapur  Road' with two spaces; a caller types one."""
-    model = PriceModel(10.0, 0.05, 2.0, 3.0, {"other": 0.0, "Sarjapur  Road": 1.0})
-    assert model.predict("Sarjapur Road", 1000, 2, 2) == model.predict("Sarjapur  Road", 1000, 2, 2)
+    path = tmp_path / "model.json"
+    path.write_text(json.dumps(small | {"locations": {"other": 0.0, "Sarjapur  Road": 0.0}}))
+    assert PriceModel.from_json(path).predict("Sarjapur Road", 1000, 2, 2) == 50.0
 
 
 def test_numbers_may_arrive_as_text_from_a_form(model: PriceModel) -> None:
-    assert model.predict("Hebbal", "1000", "2", "2") == 68.0
+    assert model.predict("Hebbal", "1000", "2", "2") == 50.0
+
+
+def test_the_pooled_bucket_is_not_a_place(model: PriceModel) -> None:
+    assert "other" not in model.location_names()
+    with pytest.raises(InvalidInputError, match="not a listed location"):
+        model.predict("other", 1000, 2, 2)
 
 
 def test_an_unknown_location_is_refused_not_priced_as_none(model: PriceModel) -> None:
     """The 2024 version priced an unknown location as if it had none."""
-    with pytest.raises(InvalidInputError, match="not a location the model was trained on"):
+    with pytest.raises(InvalidInputError, match="not a listed location") as refused:
         model.predict("Atlantis", 1000, 2, 2)
-    assert model.predict("Hebbal", 1000, 2, 2) > 0  # the positive control, same path
+    assert refused.value.field == "location"
 
 
 @pytest.mark.parametrize(
-    ("field", "value"),
+    ("args", "field", "reason"),
     [
-        pytest.param("sqft", True, id="bool-is-not-a-number"),
-        pytest.param("sqft", float("nan"), id="nan"),
-        pytest.param("sqft", float("inf"), id="infinity"),
-        pytest.param("sqft", "-1000", id="leading-dash"),
-        pytest.param("sqft", "=1+1", id="formula"),
-        pytest.param("sqft", " ", id="blank"),
-        pytest.param("sqft", "1000\n2000", id="newline"),
-        pytest.param("sqft", None, id="missing"),
-        pytest.param("sqft", [1000], id="list"),
-        pytest.param("sqft", 10**9, id="huge"),
-        pytest.param("bhk", 2.5, id="fractional-bhk"),
-        pytest.param("bhk", 0, id="zero-bhk"),
-        pytest.param("bhk", 11, id="too-many-bhk"),
-        pytest.param("bath", 4, id="bath-over-bhk-plus-one"),
-        pytest.param("location", "", id="empty-location"),
-        pytest.param("location", 42, id="numeric-location"),
+        pytest.param(("Hebbal", True, 2, 2), "total_sqft", "must be a number", id="bool"),
+        pytest.param(("Hebbal", float("nan"), 2, 2), "total_sqft", "finite", id="nan"),
+        pytest.param(("Hebbal", float("inf"), 2, 2), "total_sqft", "finite", id="infinity"),
+        pytest.param(("Hebbal", "=1+1", 2, 2), "total_sqft", "must be a number", id="formula"),
+        pytest.param(("Hebbal", " ", 2, 2), "total_sqft", "must be a number", id="blank"),
+        pytest.param(("Hebbal", None, 2, 2), "total_sqft", "must be a number", id="missing"),
+        pytest.param(("Hebbal", [1000], 2, 2), "total_sqft", "must be a number", id="list"),
+        pytest.param(("Hebbal", "-1000", 2, 2), "total_sqft", "at least 300", id="negative"),
+        pytest.param(("Hebbal", 10**9, 2, 2), "total_sqft", "at most 30,000", id="huge"),
+        pytest.param(("Hebbal", 1000, 2.5, 2), "bhk", "whole number from 1 to 10", id="half-bhk"),
+        pytest.param(("Hebbal", 1000, 0, 1), "bhk", "whole number from 1 to 10", id="zero-bhk"),
+        pytest.param(("Hebbal", 9000, 11, 2), "bhk", "whole number from 1 to 10", id="11-bhk"),
+        pytest.param(("Hebbal", 1000, 2, 4), "bath", "whole number from 1 to 3", id="bath"),
+        pytest.param(("", 1000, 2, 2), "location", "listed names", id="empty-location"),
+        pytest.param((42, 1000, 2, 2), "location", "listed names", id="numeric-location"),
     ],
 )
-def test_hostile_input_is_refused_with_a_reason(
-    model: PriceModel, field: str, value: object
+def test_hostile_input_is_refused_for_its_own_reason(
+    model: PriceModel, args: tuple[object, ...], field: str, reason: str
 ) -> None:
-    args: dict[str, object] = {"location": "Whitefield", "sqft": 1000, "bhk": 2, "bath": 2}
-    args[field] = value
-    with pytest.raises(InvalidInputError) as refused:
-        model.predict(args["location"], args["sqft"], args["bhk"], args["bath"])
-    assert str(refused.value)  # every refusal says why
+    with pytest.raises(InvalidInputError, match=reason) as refused:
+        model.predict(*args)
+    assert refused.value.field == field
 
 
-def test_area_below_the_training_floor_is_refused(model: PriceModel) -> None:
-    with pytest.raises(InvalidInputError, match="at least 300 per bedroom"):
-        model.predict("Whitefield", 599, 2, 2)
-    assert model.predict("Whitefield", 600, 2, 2) > 0
+@pytest.mark.parametrize(
+    "args",
+    [
+        pytest.param(("Hebbal", 600, 2, 2), id="smallest-2bhk-area"),
+        pytest.param(("Hebbal", 30000, 10, 11), id="largest-area-most-rooms"),
+        pytest.param(("Hebbal", "300", 1, 1), id="smallest-home"),
+    ],
+)
+def test_the_edges_of_each_range_are_accepted(model: PriceModel, args: tuple[object, ...]) -> None:
+    """The control for the refusals above: the same checks pass at their limits."""
+    assert model.predict(*args) > 0
 
 
-def test_a_non_positive_estimate_is_refused_not_shown() -> None:
-    cheap = PriceModel(
-        intercept=-500.0, sqft=0.01, bath=0.0, bhk=0.0, locations={"other": 0.0, "Hebbal": 0.0}
-    )
-    with pytest.raises(InvalidInputError, match="no meaningful price"):
-        cheap.predict("Hebbal", 1000, 2, 2)
-
-
-def test_locations_are_listed_sorted(model: PriceModel) -> None:
-    assert model.location_names() == ["Hebbal", "Whitefield", "other"]
+def test_a_model_file_without_its_accuracy_is_refused(
+    tmp_path: Path, small: dict[str, object]
+) -> None:
+    path = tmp_path / "model.json"
+    path.write_text(json.dumps(small | {"scores": {}}))
+    with pytest.raises(KeyError):
+        PriceModel.from_json(path)

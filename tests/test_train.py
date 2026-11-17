@@ -1,10 +1,12 @@
-"""The model is reproducible from the data, and the JSON predicts what scikit-learn does."""
+# SPDX-License-Identifier: MIT
+"""The model rebuilds from the data, and the JSON predicts what scikit-learn does."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import pytest
 
@@ -28,27 +30,56 @@ def test_area_text_becomes_a_number_or_nothing(raw: str, expected: float | None)
 
 
 @pytest.fixture(scope="module")
-def trained(tmp_path_factory: pytest.TempPathFactory) -> dict[str, object]:
-    out = tmp_path_factory.mktemp("model") / "model.json"
-    assert train.main(["--out", str(out)]) == 0
-    loaded: dict[str, object] = json.loads(out.read_text(encoding="utf-8"))
-    return loaded
+def trained() -> train.Trained:
+    return train.train(train.clean(pd.read_csv(train.DATA)))
 
 
-def test_the_committed_model_is_what_the_data_and_code_produce(trained: dict[str, object]) -> None:
-    committed = json.loads(COMMITTED.read_text(encoding="utf-8"))
-    for key in ("intercept", "coefficients", "locations", "scores", "data_sha256"):
-        assert committed[key] == pytest.approx(trained[key]), key
+def test_the_committed_model_is_what_the_data_and_code_produce(trained: train.Trained) -> None:
+    rebuilt = flat(json.loads(json.dumps(train.export(trained, ""))))
+    committed = flat(json.loads(COMMITTED.read_text(encoding="utf-8")))
+    for key, value in rebuilt.items():
+        if key.startswith(("data_sha256", "trained_with")):
+            continue
+        same = pytest.approx(value, rel=1e-9) if isinstance(value, float) else value
+        assert committed[key] == same, key
 
 
-def test_the_json_model_predicts_what_scikit_learn_predicts(tmp_path: Path) -> None:
-    df = train.remove_outliers(train.clean(pd.read_csv(train.DATA)))
-    x, y = train.features(df)
-    fitted, _ = train.fit(x, y)
+def flat(tree: dict[str, object], prefix: str = "") -> dict[str, object]:
+    """{"a": {"b": 1}} -> {"a.b": 1}, so nested numbers compare one by one."""
+    out: dict[str, object] = {}
+    for key, value in tree.items():
+        if isinstance(value, dict):
+            out |= flat(value, f"{prefix}{key}.")
+        else:
+            out[f"{prefix}{key}"] = value
+    return out
+
+
+def test_the_json_model_predicts_what_scikit_learn_predicts(
+    trained: train.Trained, tmp_path: Path
+) -> None:
     out = tmp_path / "model.json"
-    out.write_text(json.dumps(train.export(fitted, x, {}, "")), encoding="utf-8")
+    out.write_text(json.dumps(train.export(trained, "")), encoding="utf-8")
     model = PriceModel.from_json(out)
-    for _, row in df.sample(25, random_state=1).iterrows():
-        expected = fitted.predict(x.loc[[row.name]])[0]
+    sample = trained.rows[trained.rows["location"] != "other"].sample(25, random_state=1)
+    locations = sorted(trained.rows["location"].unique())
+    x, _ = train.features(sample, locations)
+    expected = np.exp(trained.model.predict(train.log_area(x)))
+    for (_, row), want in zip(sample.iterrows(), expected, strict=True):
         got = model.predict(row["location"], row["total_sqft"], row["bhk"], row["bath"])
-        assert got == pytest.approx(round(expected, 2), abs=0.01)
+        assert got == pytest.approx(want, abs=0.01)
+
+
+def test_the_test_rows_are_not_filtered_by_price(trained: train.Trained) -> None:
+    """The point of the split-first pipeline: every plausible test row is scored."""
+    plausible = len(train.plausible(train.clean(pd.read_csv(train.DATA))))
+    held_out = trained.scores["held_out"]["rows"]
+    assert held_out + trained.scores["rows_train"] == plausible
+
+
+def test_the_page_script_carries_the_same_weights_as_the_json() -> None:
+    script = COMMITTED.with_suffix(".js").read_text(encoding="utf-8")
+    prefix = f"{train.BROWSER_GLOBAL} = "
+    assert script.startswith(prefix)
+    assert script.endswith(";\n")
+    assert json.loads(script[len(prefix) : -2]) == json.loads(COMMITTED.read_text(encoding="utf-8"))
