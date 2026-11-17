@@ -1,0 +1,16 @@
+# Weekly update pull requests for the locked Python packages and the pinned actions.
+# The cooldown lets a new release age a week before it is proposed.
+version: 2
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

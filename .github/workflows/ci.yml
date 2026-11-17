@@ -8,9 +8,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -28,6 +33,6 @@ jobs:
           uv run --locked ruff check .
           uv run --locked ruff format --check .
       - name: Types
-        run: uv run --locked mypy src tests
+        run: uv run --locked mypy src tests scripts
       - name: Tests, with the coverage floor
         run: uv run --locked pytest --cov --cov-report=term-missing
