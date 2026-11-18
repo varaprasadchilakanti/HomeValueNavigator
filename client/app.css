@@ -19,7 +19,7 @@
     --on-royal: #ffffff;
     --gold: light-dark(#815c0a, #e6b55d);
     --error: light-dark(#ba2c25, #f47c6e);
-    --shade: light-dark(rgb(25 32 57 / 6%), rgb(0 0 0 / 35%));
+    --shade: light-dark(rgb(25 32 57 / 6%), transparent); /* no shadow in dark: the surfaces' lightness does it */
     --shadow: 0 1px 2px var(--shade), 0 10px 30px var(--shade);
 
     /* One family, the platform's own UI face; system-ui is left out for its fallbacks on
@@ -263,7 +263,7 @@ select:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; bor
     font-weight: 600;
     letter-spacing: 0.06em;
     text-transform: uppercase;
-    color: var(--muted);
+    color: var(--gold);
 }
 .price {
     margin: 6px 0 4px;
@@ -271,7 +271,6 @@ select:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; bor
     font-weight: 700;
     letter-spacing: -0.02em;
     line-height: 1.1;
-    color: var(--gold);
     font-variant-numeric: tabular-nums;
 }
 .price.waiting { color: var(--muted); font-weight: 400; }
