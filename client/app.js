@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Estimates in the browser from the model's weights (model/model.js, written with
 // model/model.json by src/homevalue/train.py). The checks follow src/homevalue/model.py
-// and read the same bounds; the page offers 1 to 5 bedrooms. Text is set with
+// and read the same bounds; the page offers 1 to 5 bedrooms and opens on the location
+// with the most listings. Text is set with
 // textContent only.
 "use strict";
 
@@ -12,6 +13,8 @@ const RUPEE = "\u20B9";
 const DASH = "\u2013";
 const OTHER = "other";
 const LAKH = 100000;
+const RATE_STEP = 50; // rupees; the rate is an estimate, not a quote
+const EM_DASH = "\u2014";
 
 const byId = (id) => document.getElementById(id);
 const key = (name) => name.trim().split(/\s+/).join(" ").toLowerCase();
@@ -24,16 +27,17 @@ function loadModel(raw) {
     const w = raw?.coefficients;
     const b = raw?.bounds;
     const within = raw?.scores?.held_out?.median_abs_pct_error;
-    const numbers = [raw?.intercept, w?.log_total_sqft, w?.bath, w?.bhk, within,
+    const tested = raw?.scores?.held_out?.rows;
+    const numbers = [raw?.intercept, w?.log_total_sqft, w?.bath, w?.bhk, within, tested,
         b?.min_sqft_per_bhk, b?.max_sqft, b?.max_extra_bath];
     if (!numbers.every(isNumber) || typeof raw.locations !== "object" || !raw.locations) return null;
     const offsets = new Map(Object.entries(raw.locations).filter(([, v]) => isNumber(v)));
     const names = [...offsets.keys()].filter((n) => n !== OTHER).sort((a, c) => a.localeCompare(c));
-    if (names.length === 0) return null;
+    if (!names.includes(raw.default_location)) return null;
     return {
         estimate: (sqft, bhk, bath, place) => Math.exp(raw.intercept + w.log_total_sqft * Math.log(sqft)
             + w.bath * bath + w.bhk * bhk + offsets.get(place)),
-        names, within,
+        names, within, tested, defaultLocation: raw.default_location,
         minPerBhk: b.min_sqft_per_bhk, maxSqft: b.max_sqft, extraBath: b.max_extra_bath,
     };
 }
@@ -62,13 +66,14 @@ function setUpTheme() {
 
 // ---------------------------------------------------------------- formatting
 
-/** 69.7 -> "Rs 69.7 lakh"; 100 lakh and above in crore. */
+/** 69.7 -> "Rs 70 lakh"; from 100 lakh, crore to one place. Finer would claim precision
+ *  the model does not have. */
 function money(lakh) {
-    if (lakh >= 99.95) return `${RUPEE}${(lakh / 100).toFixed(2)} crore`;
-    return `${RUPEE}${lakh.toFixed(1)} lakh`;
+    if (lakh >= 99.5) return `${RUPEE}${(lakh / 100).toFixed(1)} crore`;
+    return `${RUPEE}${Math.round(lakh)} lakh`;
 }
 
-/** "Rs 56.2 - 83.1 lakh", or both units in full when they differ. */
+/** "Rs 56 - 83 lakh", or both units in full when they differ. */
 function span(low, high) {
     const [a, b] = [money(low), money(high)];
     const [aNumber, aUnit] = a.split(" ");
@@ -129,7 +134,8 @@ function main() {
     function setError(id, message) {
         const box = byId(`${id}-error`);
         box.hidden = message === null;
-        box.textContent = message ?? "";
+        const prefix = Object.assign(document.createElement("span"), { className: "sr-only", textContent: "Error: " });
+        box.replaceChildren(...(message === null ? [] : [prefix, message]));
         byId(id).setAttribute("aria-invalid", String(message !== null));
     }
 
@@ -143,6 +149,7 @@ function main() {
 
     function show(price, range, spoken, perSqft = "") {
         byId("price").textContent = price;
+        byId("price").classList.toggle("waiting", price === EM_DASH);
         byId("range").textContent = range;
         byId("per-sqft").textContent = perSqft;
         clearTimeout(announceTimer);
@@ -157,13 +164,13 @@ function main() {
         const area = areaProblem(sqft, bhk);
         setError("sqft", touched.sqft ? area : null);
         setError("location", touched.location && typed.trim() && !place ? "Choose a location from the list." : null);
-        if (area || !place) return show("--", "Enter the details to see an estimate.", "");
+        if (area || !place) return show(EM_DASH, "Enter the details to see an estimate.", "");
         const price = model.estimate(sqft, bhk, chosen("bath"), place);
         const low = price * (1 - model.within);
         const high = price * (1 + model.within);
-        const rate = Math.round((price * LAKH) / sqft).toLocaleString("en-IN");
-        return show(money(price), `Likely ${span(low, high)}`,
-            `Estimated ${money(price)}, likely between ${money(low)} and ${money(high)}.`,
+        const rate = (Math.round((price * LAKH) / sqft / RATE_STEP) * RATE_STEP).toLocaleString("en-IN");
+        return show(money(price), `Typical range ${span(low, high)}`,
+            `Estimated asking price ${money(price)}; typical range ${money(low)} to ${money(high)}.`,
             `About ${RUPEE}${rate} per sq ft`);
     }
 
@@ -247,8 +254,10 @@ function main() {
     });
     byId("form").addEventListener("submit", (e) => e.preventDefault());
     location.placeholder = `Search ${model.names.length} locations`;
-    byId("accuracy").textContent = "On homes it had not seen, half of the model's estimates were "
-        + `within ${Math.round(model.within * 100)}% of the listed price; the range above shows that band.`;
+    location.value = model.defaultLocation;
+    byId("accuracy").textContent = `Tested on ${model.tested.toLocaleString("en-IN")} listings it had `
+        + `not seen, half of its estimates were within ${Math.round(model.within * 100)}% of the `
+        + "asking price. The typical range is that band; the other half fall outside it.";
     update();
 }
 

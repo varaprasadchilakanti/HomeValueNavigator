@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: MIT */
-/* Royal palette. Indigo marks what can be acted on; gold marks the one result;
-   red marks errors and nothing else. Every text pair meets WCAG 2.2 AA in both themes. */
+/* Royal palette, each colour with one meaning. Indigo marks what can be acted on; gold
+   marks the result; red marks errors and nothing else. In light the price is set in ink
+   under a gold rule, since gold text on white reads weak; in dark the price itself is gold.
+   Every text pair meets WCAG 2.2 AA in both themes (the lowest is 5.9:1). */
 :root {
     --bg: #f7f6f2;
     --surface: #ffffff;
@@ -8,10 +10,11 @@
     --muted: #575d7e;
     --line: #e4e1d8;
     --field: #8a8fa8;
-    --royal: #2f3a8f;
+    --royal: #253080;
     --royal-soft: #eceefa;
     --on-royal: #ffffff;
-    --gold: #8a650c;
+    --gold: #7a5a0a;
+    --price: var(--ink);
     --error: #b42318;
     --shadow: 0 1px 2px rgb(26 31 61 / 5%), 0 10px 30px rgb(26 31 61 / 6%);
     color-scheme: light;
@@ -20,14 +23,15 @@
 :root[data-theme="dark"] {
     --bg: #0c1024;
     --surface: #141a37;
-    --ink: #eceefa;
+    --ink: #e2e4f0;
     --muted: #a6abca;
     --line: #252c52;
     --field: #5d6593;
-    --royal: #9aa6ff;
+    --royal: #a9b4f5;
     --royal-soft: #1f2752;
     --on-royal: #0c1024;
     --gold: #e6c574;
+    --price: var(--gold);
     --error: #ff8a80;
     --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 30%);
     color-scheme: dark;
@@ -37,14 +41,15 @@
     :root:not([data-theme="light"]) {
         --bg: #0c1024;
         --surface: #141a37;
-        --ink: #eceefa;
+        --ink: #e2e4f0;
         --muted: #a6abca;
         --line: #252c52;
         --field: #5d6593;
-        --royal: #9aa6ff;
+        --royal: #a9b4f5;
         --royal-soft: #1f2752;
         --on-royal: #0c1024;
         --gold: #e6c574;
+        --price: var(--gold);
         --error: #ff8a80;
         --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 30%);
         color-scheme: dark;
@@ -162,8 +167,7 @@ input:-webkit-autofill {
     box-shadow: 0 0 0 100px var(--surface) inset;
 }
 
-.field-error { margin: 0; font-size: 0.88rem; color: var(--error); display: flex; gap: 6px; align-items: baseline; }
-.field-error::before { content: "Error:"; font-weight: 600; }
+.field-error { margin: 0; font-size: 0.88rem; color: var(--error); }
 
 .segments {
     position: relative;
@@ -212,7 +216,7 @@ input:-webkit-autofill {
 .empty { padding: 9px 12px; color: var(--muted); }
 
 /* Result */
-.result { position: sticky; top: 20px; }
+.result { position: sticky; top: 20px; border-top: 3px solid var(--gold); }
 .result-label {
     margin: 0;
     font-size: 0.78rem;
@@ -227,9 +231,10 @@ input:-webkit-autofill {
     font-size: clamp(2.3rem, 6vw, 3.1rem);
     font-weight: 600;
     line-height: 1.1;
-    color: var(--gold);
+    color: var(--price);
     font-variant-numeric: tabular-nums;
 }
+.price.waiting { color: var(--muted); font-weight: 400; }
 .range { margin: 0; font-weight: 500; min-height: 1.55em; }
 .per-sqft { margin: 2px 0 0; font-size: 0.9rem; color: var(--muted); min-height: 1.4em; font-variant-numeric: tabular-nums; }
 .accuracy {

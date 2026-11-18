@@ -7,19 +7,19 @@
     <meta name="color-scheme" content="light dark">
     <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
     <meta name="theme-color" content="#0c1024" media="(prefers-color-scheme: dark)">
-    <meta name="description" content="Estimate a Bengaluru home price from area, bedrooms, bathrooms and location.">
-    <title>HomeValueNavigator</title>
+    <meta name="description" content="Estimate the asking price of a Bengaluru home from its area, bedrooms, bathrooms and location.">
+    <title>Home Value Navigator</title>
     <meta name="referrer" content="no-referrer">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="HomeValueNavigator">
-    <meta property="og:description" content="Estimate a Bengaluru home price from area, bedrooms, bathrooms and location.">
+    <meta property="og:title" content="Home Value Navigator">
+    <meta property="og:description" content="Estimate the asking price of a Bengaluru home from its area, bedrooms, bathrooms and location.">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <script src="theme.js"></script>
     <link rel="stylesheet" href="app.css">
 </head>
 <body>
 <header class="bar">
-    <span class="brand">HomeValueNavigator</span>
+    <span class="brand">Home Value Navigator</span>
     <fieldset class="theme">
         <legend class="sr-only">Theme</legend>
         <input type="radio" name="theme" id="theme-system" value="system" class="sr-only">
@@ -42,13 +42,13 @@
 
 <main class="layout">
     <section class="intro">
-        <h1>Estimate a home price in Bengaluru</h1>
+        <h1>Estimate a home's asking price in Bengaluru</h1>
         <p>From a linear model trained on past listings. A learning project, not a valuation.</p>
     </section>
 
     <form id="form" class="panel" novalidate autocomplete="off">
         <div class="field">
-            <label for="sqft">Built-up area <span class="hint">sq ft</span></label>
+            <label for="sqft">Super built-up area <span class="hint">sq ft, as listed</span></label>
             <input id="sqft" type="text" inputmode="numeric" value="1200"
                    aria-describedby="sqft-error">
             <p class="field-error" id="sqft-error" hidden></p>
@@ -78,8 +78,8 @@
     </form>
 
     <section class="panel result">
-        <p class="result-label">Estimated price</p>
-        <p id="price" class="price">--</p>
+        <p class="result-label">Estimated asking price</p>
+        <p id="price" class="price waiting">&mdash;</p>
         <p id="range" class="range">Choose a location to see an estimate.</p>
         <p id="per-sqft" class="per-sqft"></p>
         <p id="accuracy" class="accuracy"></p>
@@ -90,7 +90,8 @@
 
 <footer class="foot">
     Computed in your browser; nothing you enter leaves this page.
-    Built on the codebasics real-estate course.
+    Built while following the codebasics real-estate course.
+    Do not use it to buy, sell, lend on or price a property.
     <a href="https://github.com/varaprasadchilakanti/HomeValueNavigator">Source</a>
 </footer>
 
