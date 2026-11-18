@@ -127,7 +127,7 @@ form { display: grid; gap: 22px; }
 label, legend { font-weight: 600; padding: 0; }
 .hint { font-weight: 400; font-size: var(--text-sm); color: var(--muted); margin-left: 4px; }
 
-input[type="text"], select {
+input[type="text"] {
     width: 100%;
     padding: 11px 14px;
     font: inherit;
@@ -145,26 +145,6 @@ input:-webkit-autofill {
 }
 
 .field-error { margin: 0; font-size: var(--text-sm); color: var(--error); }
-
-/* The city: text while there is one, a select (styled as the fields are) from two. */
-.static { margin: 0; font-weight: 500; }
-.select-box { position: relative; }
-select { appearance: none; padding-right: 44px; cursor: pointer; }
-select:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; border-color: var(--royal); }
-.select-box svg {
-    position: absolute;
-    top: 50%;
-    right: 13px;
-    width: 18px;
-    height: 18px;
-    transform: translateY(-50%);
-    pointer-events: none;
-    fill: none;
-    stroke: var(--muted);
-    stroke-width: 2;
-    stroke-linecap: round;
-    stroke-linejoin: round;
-}
 
 .segments {
     position: relative;
@@ -246,6 +226,18 @@ select:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; bor
     border-radius: 10px;
     box-shadow: var(--shadow);
 }
+[role="group"] { margin: 0; padding: 0; list-style: none; }
+.group-label {
+    position: sticky;
+    top: -4px;
+    padding: 8px 12px 4px;
+    background: var(--raised);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
 [role="option"] { padding: 9px 12px; border-radius: 6px; cursor: pointer; }
 /* The active option carries a bar in --royal too: the tint alone is under 3:1 (WCAG 1.4.11). */
 [role="option"][aria-selected="true"], [role="option"]:not(.empty):hover {
@@ -304,7 +296,7 @@ select:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; bor
 @media print {
     :root { color-scheme: light; }
     body { background: #fff; }
-    .theme, .combo-toggle, .select-box svg { display: none; }
+    .theme, .combo-toggle { display: none; }
     .panel { box-shadow: none; }
     .result { position: static; break-inside: avoid; }
     .segments { background: none; }

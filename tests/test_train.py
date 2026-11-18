@@ -110,11 +110,15 @@ def test_the_held_out_figure_lies_inside_its_interval(trained: train.Trained) ->
 def test_the_scope_index_lists_each_trained_model_by_name(tmp_path: Path) -> None:
     for scope_id, name in [("pune", "Pune"), ("bengaluru", "Bengaluru")]:
         (tmp_path / scope_id).mkdir()
-        body = {"scope": {"id": scope_id, "name": name, "currency": "INR"}}
+        body = {
+            "scope": {"id": scope_id, "name": name, "currency": "INR"},
+            "locations": {"other": 0.0, "Zeta": 0.1, "alpha": 0.2},
+        }
         (tmp_path / scope_id / "model.json").write_text(json.dumps(body), encoding="utf-8")
+    names = ["alpha", "Zeta"]  # case-blind order; the pooled "other" is not a place to pick
     assert train.scope_index(tmp_path) == [
-        {"id": "bengaluru", "name": "Bengaluru"},
-        {"id": "pune", "name": "Pune"},
+        {"id": "bengaluru", "name": "Bengaluru", "locations": names},
+        {"id": "pune", "name": "Pune", "locations": names},
     ]
 
 

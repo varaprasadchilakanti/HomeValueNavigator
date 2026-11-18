@@ -42,25 +42,17 @@
 
 <main class="layout">
     <section class="intro">
-        <h1>Estimate a home's asking price in <span id="scope-name">Bengaluru</span></h1>
-        <p>From a linear model trained on past listings. A learning project, not a valuation.</p>
+        <h1>Estimate a home's asking price</h1>
+        <p>In <span id="cities">Bengaluru</span>, from a linear model trained on past listings.
+            A learning project, not a valuation.</p>
     </section>
 
     <form id="form" class="panel" novalidate autocomplete="off">
         <div class="field">
-            <label for="city" id="city-label">City</label>
-            <div class="select-box" id="city-box" hidden>
-                <select id="city"></select>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
-            </div>
-            <p class="static" id="city-only"></p>
-        </div>
-
-        <div class="field">
             <label for="location">Location</label>
             <div class="combo-box">
                 <input id="location" type="text" role="combobox" spellcheck="false"
-                       placeholder="Search locations" aria-autocomplete="list"
+                       placeholder="Select a location" aria-autocomplete="list"
                        aria-expanded="false" aria-controls="location-list"
                        aria-describedby="location-error">
                 <button type="button" id="location-toggle" class="combo-toggle" tabindex="-1"
@@ -72,13 +64,6 @@
             <p class="field-error" id="location-error" hidden></p>
         </div>
 
-        <div class="field">
-            <label for="sqft">Area <span class="hint">sq ft, as listed</span></label>
-            <input id="sqft" type="text" inputmode="numeric" value="1200"
-                   aria-describedby="sqft-error">
-            <p class="field-error" id="sqft-error" hidden></p>
-        </div>
-
         <fieldset class="field">
             <legend>Bedrooms <span class="hint">BHK</span></legend>
             <div class="segments" id="bhk"></div>
@@ -88,6 +73,13 @@
             <legend>Bathrooms</legend>
             <div class="segments" id="bath"></div>
         </fieldset>
+
+        <div class="field">
+            <label for="sqft">Area <span class="hint">sq ft, as listed</span></label>
+            <input id="sqft" type="text" inputmode="decimal" placeholder="For example 1200"
+                   aria-describedby="sqft-error">
+            <p class="field-error" id="sqft-error" hidden></p>
+        </div>
     </form>
 
     <section class="panel result">

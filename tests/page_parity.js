@@ -19,5 +19,7 @@ const area = (text) => {
 process.stdout.write(JSON.stringify({
     estimates: cases.estimates.map(([place, sqft, bhk, bath]) => model.estimate(sqft, bhk, bath, place)),
     areas: cases.areas.map(area),
-    cities: cases.cities.map(([raw, search]) => page.chooseScope(raw, search).current?.id ?? null),
+    scopes: cases.scopes.map((raw) => page.readScopes(raw).map((s) => s.id)),
+    matches: cases.matches.map(([scopes, query]) => page
+        .matchPlaces(page.placesOf(scopes), query, () => false).map((p) => p.label)),
 }));

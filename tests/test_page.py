@@ -28,15 +28,25 @@ ESTIMATES = [
     ("Hebbal", 450, 1, 1),
     ("Sarjapur Road", 1800, 3, 3),
 ]
-TWO = [{"id": "bengaluru", "name": "Bengaluru"}, {"id": "pune", "name": "Pune"}]
-#: (the scope list, the address's query, the city the page should open on)
-CITIES = [
-    (TWO, "", "bengaluru"),
-    (TWO, "?city=pune", "pune"),
-    (TWO, "?city=delhi", "bengaluru"),
-    ([{"id": "../x", "name": "X"}, *TWO], "?city=../x", "bengaluru"),
-    ([{"id": "pune"}], "", None),
-    ("not a list", "", None),
+TWO = [
+    {"id": "bengaluru", "name": "Bengaluru", "locations": ["Whitefield", "Hebbal"]},
+    {"id": "pune", "name": "Pune", "locations": ["Baner", "White Town"]},
+]
+#: (scopes.js as written, the city ids the page keeps)
+SCOPES = [
+    (TWO, ["bengaluru", "pune"]),
+    ([{"id": "../x", "name": "X", "locations": []}, *TWO], ["bengaluru", "pune"]),
+    ([{"id": "pune", "name": "Pune"}], []),
+    ([{"id": "pune", "name": "Pune", "locations": [1]}], []),
+    ("not a list", []),
+]
+#: (scopes, what is typed, the places offered in order)
+MATCHES = [
+    (TWO, "", ["Whitefield, Bengaluru", "Hebbal, Bengaluru", "Baner, Pune", "White Town, Pune"]),
+    (TWO, "white", ["Whitefield, Bengaluru", "White Town, Pune"]),
+    (TWO, "pune", ["Baner, Pune", "White Town, Pune"]),
+    (TWO, "bal", ["Hebbal, Bengaluru"]),
+    (TWO[:1], "heb", ["Hebbal"]),
 ]
 AREAS = ["1200", " 1,200 ", "1200.5", "1e3", "1_200", "12 00", "-5", "1200.", "\u0661\u0662"]
 
@@ -47,8 +57,14 @@ def page_answers() -> dict[str, list[object]]:
         if os.environ.get("CI"):
             pytest.fail("Node is needed in CI to test the page.")
         pytest.skip("Node is not installed.")
-    cities = [[raw, search] for raw, search, _ in CITIES]
-    cases = json.dumps({"estimates": ESTIMATES, "areas": AREAS, "cities": cities})
+    cases = json.dumps(
+        {
+            "estimates": ESTIMATES,
+            "areas": AREAS,
+            "scopes": [raw for raw, _ in SCOPES],
+            "matches": [[scopes, typed] for scopes, typed, _ in MATCHES],
+        }
+    )
     run = subprocess.run(
         [node, str(HARNESS)], input=cases, check=True, capture_output=True, text=True
     )
@@ -73,6 +89,9 @@ def test_the_page_reads_an_area_as_the_python_model_does() -> None:
         assert accepted == (read is not None), text
 
 
-def test_the_page_opens_only_a_listed_city_with_a_safe_id() -> None:
-    expected = [city for _, _, city in CITIES]
-    assert page_answers()["cities"] == expected
+def test_the_page_keeps_only_well_formed_cities_with_safe_ids() -> None:
+    assert page_answers()["scopes"] == [kept for _, kept in SCOPES]
+
+
+def test_one_search_finds_places_by_name_or_city_grouped_by_city() -> None:
+    assert page_answers()["matches"] == [offered for _, _, offered in MATCHES]

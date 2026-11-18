@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: MIT
-// Estimates in the browser from the model's weights (model/<scope>/model.js, written with
-// model.json by src/homevalue/train.py). The city comes from model/scopes.js, the list of
-// trained scopes, and the address (?city=<id>), so a link opens the same city. The checks follow src/homevalue/model.py
-// and read the same bounds; the page offers 1 to 5 bedrooms and opens on the location
-// with the most listings. Text is set with
-// textContent only.
+// Estimates in the browser. model/scopes.js lists each trained city with its location
+// names; one search field covers them all, grouped by city, and choosing a location loads
+// that city's weights (model/<id>/model.js, written with model.json by
+// src/homevalue/train.py). The checks follow src/homevalue/model.py and read the same
+// bounds. Nothing is chosen for the visitor; the answers are kept in the address, so a
+// link or a reload shows the same estimate. Text is set with textContent only.
 "use strict";
 
 const CHOICES = 5;
 const ANNOUNCE_DELAY_MS = 500;
 const RUPEE = "\u20B9";
 const DASH = "\u2013";
-const OTHER = "other";
 const LAKH = 100000;
 const RATE_STEP = 50; // rupees; the rate is an estimate, not a quote
 const EM_DASH = "\u2014";
@@ -36,8 +35,7 @@ function loadModel(raw) {
     const largest = new Map(Object.entries(b.max_sqft_by_bhk)
         .filter(([, v]) => isNumber(v)).map(([k, v]) => [Number(k), v]));
     const offsets = new Map(Object.entries(raw.locations).filter(([, v]) => isNumber(v)));
-    const names = [...offsets.keys()].filter((n) => n !== OTHER).sort((a, c) => a.localeCompare(c));
-    if (!names.includes(raw.default_location) || largest.size === 0) return null;
+    if (largest.size === 0) return null;
     // The page formats rupees in lakh and crore, and areas in sq ft; another scope's units
     // need their own formatting before this page can show it.
     const scope = raw.scope;
@@ -46,17 +44,36 @@ function loadModel(raw) {
     return {
         estimate: (sqft, bhk, bath, place) => Math.exp(raw.intercept + w.log_total_sqft * Math.log(sqft)
             + w.bath * bath + w.bhk * bhk + offsets.get(place)),
-        names, within, tested, defaultLocation: raw.default_location, scopeId: scope.id,
+        within, tested, scopeId: scope.id,
         minPerBhk: b.min_sqft_per_bhk, largest, extraBath: b.max_extra_bath,
     };
 }
 
-/** The trusted scopes from scopes.js and the one the address asks for, else the first. */
-function chooseScope(raw, search) {
-    const list = (Array.isArray(raw) ? raw : [])
-        .filter((s) => typeof s?.name === "string" && typeof s?.id === "string" && SCOPE_ID.test(s.id));
-    const asked = new URLSearchParams(search).get("city");
-    return { list, current: list.find((s) => s.id === asked) ?? list[0] ?? null };
+/** The well-formed cities in scopes.js, each with its location names; the rest are dropped. */
+function readScopes(raw) {
+    return (Array.isArray(raw) ? raw : []).filter((s) => typeof s?.id === "string" && SCOPE_ID.test(s.id)
+        && typeof s.name === "string" && Array.isArray(s.locations)
+        && s.locations.every((n) => typeof n === "string"));
+}
+
+/** One entry per location; labelled with its city once there is more than one city. */
+function placesOf(scopes) {
+    const many = scopes.length > 1;
+    return scopes.flatMap((s) => s.locations.map((name) => ({
+        scope: s.id, city: s.name, name, label: many ? `${name}, ${s.name}` : name,
+    })));
+}
+
+/** The places for what is typed, cities in their order: every place when nothing is typed
+ *  or a place is named exactly; otherwise those whose name or city starts with the text,
+ *  then those whose label contains it. */
+function matchPlaces(places, query, exact) {
+    const q = key(query);
+    if (!q || exact(q)) return places;
+    const starts = (p) => key(p.name).startsWith(q) || key(p.city).startsWith(q);
+    const ranked = [...places.filter(starts), ...places.filter((p) => !starts(p) && key(p.label).includes(q))];
+    const cities = [...new Set(places.map((p) => p.scope))];
+    return cities.flatMap((id) => ranked.filter((p) => p.scope === id));
 }
 
 // ---------------------------------------------------------------- theme
@@ -110,44 +127,36 @@ function parseArea(text) {
 
 function failed() {
     byId("range").textContent = "The model did not load. Try reloading the page.";
-    document.querySelectorAll("#form input, #form select").forEach((input) => { input.disabled = true; });
+    document.querySelectorAll("#form input").forEach((input) => { input.disabled = true; });
 }
 
-/** One city is shown as text; from two, a select that reopens the page on the new city. */
-function setUpCity(list, current) {
-    byId("scope-name").textContent = current.name;
-    byId("city-only").textContent = current.name;
-    if (list.length < 2) {
-        byId("city-label").removeAttribute("for");
-        return;
-    }
-    const select = byId("city");
-    select.append(...list.map((s) => new Option(s.name, s.id, false, s.id === current.id)));
-    select.addEventListener("change", () => {
-        const url = new URL(window.location.href);
-        url.searchParams.set("city", select.value);
-        window.location.assign(url);
+/** A city's weights, loaded once from model/<id>/model.js; null when missing or malformed. */
+function loadScope(id) {
+    return new Promise((resolve) => {
+        const script = Object.assign(document.createElement("script"), { src: `../model/${id}/model.js` });
+        script.addEventListener("load", () => {
+            const model = loadModel(window.HOMEVALUE_MODEL);
+            resolve(model && model.scopeId === id ? model : null);
+        });
+        script.addEventListener("error", () => resolve(null));
+        document.body.append(script);
     });
-    byId("city-only").hidden = true;
-    byId("city-box").hidden = false;
 }
 
-/** Shows the cities, then loads the chosen one's model and starts the form. */
 function start() {
     setUpTheme();
-    const { list, current } = chooseScope(window.HOMEVALUE_SCOPES, window.location.search);
-    if (!current) return failed();
-    setUpCity(list, current);
-    const script = Object.assign(document.createElement("script"), { src: `../model/${current.id}/model.js` });
-    script.addEventListener("load", () => main(current.id));
-    script.addEventListener("error", failed);
-    document.body.append(script);
+    const scopes = readScopes(window.HOMEVALUE_SCOPES);
+    if (scopes.length === 0) return failed();
+    return main(scopes);
 }
 
-function main(scopeId) {
-    const model = loadModel(window.HOMEVALUE_MODEL);
-    if (!model || model.scopeId !== scopeId) return failed();
-    const byKey = new Map(model.names.map((n) => [key(n), n]));
+function main(scopes) {
+    const places = placesOf(scopes);
+    const byKey = new Map(places.map((p) => [key(p.label), p]));
+    for (const p of places) {
+        if (places.filter((o) => key(o.name) === key(p.name)).length === 1) byKey.set(key(p.name), p);
+    }
+    const models = new Map(); // city id -> its model, or a Promise while it loads
     const touched = { sqft: false, location: false };
     const location = byId("location");
     const list = byId("location-list");
@@ -155,31 +164,37 @@ function main(scopeId) {
     let announceTimer = 0;
     let active = -1;
     let shown = [];
-    let chosenLocation = "";
+    let chosen = null; // the place picked last
 
-    function addSegments(name, start, counts) {
+    const ready = () => {
+        const model = chosen ? models.get(chosen.scope) : null;
+        return model && !(model instanceof Promise) ? model : null;
+    };
+
+    function addSegments(name, counts) {
         for (const i of counts) {
             const input = Object.assign(document.createElement("input"), {
-                type: "radio", name, id: `${name}-${i}`, value: String(i), checked: i === start,
-                className: "sr-only",
+                type: "radio", name, id: `${name}-${i}`, value: String(i), className: "sr-only",
             });
-            const label = Object.assign(document.createElement("label"), {
-                htmlFor: input.id, textContent: String(i),
-            });
+            const label = Object.assign(document.createElement("label"), { htmlFor: input.id, textContent: String(i) });
             byId(name).append(input, label);
         }
     }
 
-    function chosen(name) {
-        return Number(document.querySelector(`input[name="${name}"]:checked`)?.value);
-    }
+    const picked = (name) => Number(document.querySelector(`input[name="${name}"]:checked`)?.value ?? NaN);
 
-    // Bathroom counts the training data did not cover are not offered.
-    function limitBaths() {
-        const most = chosen("bhk") + model.extraBath;
+    // Counts the chosen city's data did not cover are not offered; nothing is chosen for the visitor.
+    function limitChoices() {
+        const model = ready();
+        const bhk = picked("bhk");
+        document.querySelectorAll('input[name="bhk"]').forEach((input) => {
+            input.disabled = model !== null && !model.largest.has(Number(input.value));
+            if (input.disabled) input.checked = false;
+        });
+        const most = model && Number.isFinite(bhk) ? bhk + model.extraBath : Infinity;
         document.querySelectorAll('input[name="bath"]').forEach((input) => {
             input.disabled = Number(input.value) > most;
-            if (input.disabled && input.checked) byId(`bath-${most}`).checked = true;
+            if (input.disabled) input.checked = false;
         });
     }
 
@@ -191,11 +206,12 @@ function main(scopeId) {
         byId(id).setAttribute("aria-invalid", String(message !== null));
     }
 
-    function areaProblem(sqft, bhk) {
+    function areaProblem(model, sqft, bhk) {
         if (!Number.isFinite(sqft)) return "Enter the area in square feet, for example 1200.";
+        if (!model || !Number.isFinite(bhk)) return null;
         const most = model.largest.get(bhk);
         if (sqft > most) {
-            return `The largest ${bhk} BHK listing in the data is ${most.toLocaleString("en-IN")} sq ft; enter an area up to that.`;
+            return `The largest ${bhk} BHK listing in ${chosen.city} is ${most.toLocaleString("en-IN")} sq ft; enter an area up to that.`;
         }
         const least = model.minPerBhk * bhk;
         if (sqft < least) return `A ${bhk} BHK home needs at least ${least.toLocaleString("en-IN")} sq ft.`;
@@ -211,16 +227,47 @@ function main(scopeId) {
         announceTimer = setTimeout(() => { byId("announce").textContent = spoken; }, ANNOUNCE_DELAY_MS);
     }
 
+    // What is still needed, in the order the form asks for it.
+    function missing(here, sqft, bhk, bath) {
+        const need = [[!here, "a location"], [!Number.isFinite(bhk), "bedrooms"],
+            [!Number.isFinite(bath), "bathrooms"], [!Number.isFinite(sqft), "the area"]];
+        const names = need.filter(([gap]) => gap).map(([, name]) => name);
+        if (names.length < 2) return names.join("");
+        return `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
+    }
+
+    function remember(here, sqft, bhk, bath) {
+        const query = new URLSearchParams();
+        if (here) { query.set("city", here.scope); query.set("location", here.name); }
+        if (Number.isFinite(bhk)) query.set("bhk", String(bhk));
+        if (Number.isFinite(bath)) query.set("bath", String(bath));
+        if (Number.isFinite(sqft)) query.set("sqft", String(sqft));
+        const text = query.toString();
+        try {
+            history.replaceState(null, "", text ? `?${text}` : window.location.pathname);
+        } catch { /* a page opened from disk may refuse; the estimate still shows */ }
+    }
+
     function update() {
+        // The place counts only while the field still names it; a half-typed edit does not.
+        const here = byKey.get(key(location.value)) === chosen ? chosen : null;
+        const model = here ? ready() : null;
         const sqft = parseArea(byId("sqft").value);
-        const bhk = chosen("bhk");
+        const [bhk, bath] = [picked("bhk"), picked("bath")];
         const typed = location.value;
-        const place = byKey.get(key(typed));
-        const area = areaProblem(sqft, bhk);
-        setError("sqft", touched.sqft ? area : null);
-        setError("location", touched.location && typed.trim() && !place ? "Choose a location from the list." : null);
-        if (area || !place) return show(EM_DASH, "Enter the details to see an estimate.", "");
-        const price = model.estimate(sqft, bhk, chosen("bath"), place);
+        const area = areaProblem(model, sqft, bhk);
+        setError("sqft", touched.sqft && byId("sqft").value.trim() ? area : null);
+        setError("location", touched.location && typed.trim() && !byKey.get(key(typed))
+            ? "Choose a location from the list." : null);
+        remember(here, sqft, bhk, bath);
+        byId("accuracy").textContent = model ? `Tested on ${model.tested.toLocaleString("en-IN")} ${chosen.city} `
+            + `listings it had not seen, half of its estimates were within ${Math.round(model.within * 100)}% `
+            + "of the asking price. The typical range is that band; the other half fall outside it." : "";
+        const gaps = missing(here, sqft, bhk, bath);
+        if (gaps) return show(EM_DASH, `Choose ${gaps} to see an estimate.`, "");
+        if (!model) return show(EM_DASH, `Loading ${chosen.city}${EM_DASH}`, "");
+        if (area) return show(EM_DASH, "Correct the area to see an estimate.", "");
+        const price = model.estimate(sqft, bhk, bath, chosen.name);
         const low = price * (1 - model.within);
         const high = price * (1 + model.within);
         const rate = (Math.round((price * LAKH) / sqft / RATE_STEP) * RATE_STEP).toLocaleString("en-IN");
@@ -229,9 +276,25 @@ function main(scopeId) {
             `About ${RUPEE}${rate} per sq ft`);
     }
 
+    // Loads the place's city when it is not loaded yet, then refreshes the form.
+    function choose(place) {
+        chosen = place;
+        location.value = place.label;
+        if (!models.has(place.scope)) {
+            models.set(place.scope, loadScope(place.scope).then((model) => {
+                models.set(place.scope, model);
+                if (!model) setError("location", `${place.city}'s model did not load. Try reloading the page.`);
+                limitChoices();
+                update();
+            }));
+        }
+        limitChoices();
+        update();
+    }
+
     // ---- location: an editable WAI-ARIA combobox with list autocomplete and an open button
-    // (APG combobox pattern). Typing filters; a click, the button or Down shows the list;
-    // only a listed name is accepted. A custom list, not a datalist, so it follows the theme.
+    // (APG combobox pattern), its options grouped by city. Typing filters by place or city;
+    // a click, the button or Down shows the list; only a listed place is accepted.
     function setOpen(open) {
         list.hidden = !open;
         location.setAttribute("aria-expanded", String(open));
@@ -239,29 +302,35 @@ function main(scopeId) {
         if (!open) { active = -1; location.removeAttribute("aria-activedescendant"); }
     }
 
-    // Every name when the field is empty or already holds one; otherwise those that start
-    // with the text, then those that contain it.
-    function matches(query) {
-        const q = key(query);
-        if (!q || byKey.has(q)) return model.names;
-        const starts = model.names.filter((n) => key(n).startsWith(q));
-        const within = model.names.filter((n) => !key(n).startsWith(q) && key(n).includes(q));
-        return [...starts, ...within];
-    }
-
-    function option(name, index, q) {
+    function option(place, index, q) {
         const item = Object.assign(document.createElement("li"), { id: `location-option-${index}` });
         item.setAttribute("role", "option");
         item.setAttribute("aria-selected", "false");
-        const at = q ? key(name).indexOf(q) : -1;
-        if (at < 0) item.append(name);
+        const at = q ? key(place.name).indexOf(q) : -1;
+        if (at < 0) item.append(place.name);
         else {
-            const mark = Object.assign(document.createElement("mark"), { textContent: name.slice(at, at + q.length) });
-            item.append(name.slice(0, at), mark, name.slice(at + q.length));
+            const mark = Object.assign(document.createElement("mark"), { textContent: place.name.slice(at, at + q.length) });
+            item.append(place.name.slice(0, at), mark, place.name.slice(at + q.length));
         }
         item.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus in the input
-        item.addEventListener("click", () => pick(name));
+        item.addEventListener("click", () => pick(place));
         return item;
+    }
+
+    // One group per city, named by a heading the listbox announces with each option.
+    function group(scope, q) {
+        const box = document.createElement("li");
+        box.setAttribute("role", "presentation");
+        const head = Object.assign(document.createElement("div"), {
+            id: `location-group-${scope.id}`, className: "group-label", textContent: scope.name,
+        });
+        head.setAttribute("role", "presentation");
+        const options = document.createElement("ul");
+        options.setAttribute("role", "group");
+        options.setAttribute("aria-labelledby", head.id);
+        options.append(...shown.flatMap((p, i) => (p.scope === scope.id ? [option(p, i, q)] : [])));
+        box.append(head, options);
+        return box;
     }
 
     // A listbox may own only options, so the empty message is one that cannot be chosen.
@@ -274,11 +343,10 @@ function main(scopeId) {
 
     function render() {
         const q = key(location.value);
-        shown = matches(location.value);
+        shown = matchPlaces(places, location.value, (k) => byKey.has(k));
         const filtering = q !== "" && !byKey.has(q);
-        list.replaceChildren(...(shown.length > 0
-            ? shown.map((name, i) => option(name, i, filtering ? q : ""))
-            : [noMatch()]));
+        const cities = scopes.filter((s) => shown.some((p) => p.scope === s.id));
+        list.replaceChildren(...(shown.length > 0 ? cities.map((s) => group(s, filtering ? q : "")) : [noMatch()]));
         setOpen(true);
     }
 
@@ -297,12 +365,10 @@ function main(scopeId) {
         highlight(shown.indexOf(byKey.get(key(location.value))));
     }
 
-    function pick(name) {
-        location.value = name;
-        chosenLocation = name;
+    function pick(place) {
         touched.location = true;
         setOpen(false);
-        update();
+        choose(place);
     }
 
     function onKey(e) {
@@ -316,7 +382,7 @@ function main(scopeId) {
             pick(shown[Math.max(active, 0)]);
         } else if (e.key === "Escape" && open) {
             e.preventDefault();
-            location.value = chosenLocation; // back to the last name chosen
+            location.value = chosen ? chosen.label : ""; // back to the last place chosen
             setOpen(false);
             update();
         }
@@ -338,34 +404,40 @@ function main(scopeId) {
     location.addEventListener("blur", () => {
         setOpen(false);
         const exact = byKey.get(key(location.value));
-        if (exact) { location.value = exact; chosenLocation = exact; }
         touched.location = location.value.trim() !== "";
-        update();
+        if (exact && exact !== chosen) return choose(exact);
+        if (exact) location.value = exact.label;
+        return update();
     });
 
-    // ---- the rest of the form
+    // ---- the rest of the form, then the answers a link carries
     const upTo = (n) => Array.from({ length: n }, (_, i) => i + 1);
-    addSegments("bhk", 2, upTo(CHOICES).filter((n) => model.largest.has(n)));
-    addSegments("bath", 2, upTo(CHOICES + model.extraBath));
-    limitBaths();
+    addSegments("bhk", upTo(CHOICES));
+    addSegments("bath", upTo(CHOICES + 1));
     byId("sqft").addEventListener("blur", () => { touched.sqft = true; update(); });
     byId("form").addEventListener("input", (e) => {
         if (e.target === location) return;
-        if (e.target.name === "bhk") limitBaths();
+        if (e.target.name === "bhk") limitChoices();
         update();
     });
     byId("form").addEventListener("submit", (e) => e.preventDefault());
-    location.placeholder = `Search ${model.names.length} locations`;
-    location.value = model.defaultLocation;
-    chosenLocation = model.defaultLocation;
-    byId("accuracy").textContent = `Tested on ${model.tested.toLocaleString("en-IN")} listings it had `
-        + `not seen, half of its estimates were within ${Math.round(model.within * 100)}% of the `
-        + "asking price. The typical range is that band; the other half fall outside it.";
+    byId("cities").textContent = scopes.map((s) => s.name).join(", ");
+    location.placeholder = `Select a location (${places.length})`;
+
+    const asked = new URLSearchParams(window.location.search);
+    for (const name of ["bhk", "bath"]) {
+        const input = byId(`${name}-${asked.get(name)}`);
+        if (input?.name === name) input.checked = true;
+    }
+    if (Number.isFinite(parseArea(asked.get("sqft") ?? ""))) byId("sqft").value = asked.get("sqft");
+    const place = places.find((p) => p.scope === asked.get("city") && p.name === asked.get("location"));
+    if (place) return choose(place);
+    limitChoices();
     return update();
 }
 
 if (typeof document !== "undefined") {
     start();
 } else if (typeof module !== "undefined") {
-    module.exports = { loadModel, chooseScope, parseArea, money, span }; // for tests/page_parity.js
+    module.exports = { loadModel, readScopes, placesOf, matchPlaces, parseArea, money, span }; // tests/page_parity.js
 }

@@ -310,13 +310,22 @@ def model_path(scope: dict[str, Any], root: Path = ROOT) -> Path:
     return root / "model" / str(scope["id"]) / "model.json"
 
 
-def scope_index(models: Path) -> list[dict[str, str]]:
-    """Each trained scope under models/ (models/<id>/model.json) as its id and name, by name."""
-    found = [
-        json.loads(path.read_text(encoding="utf-8"))["scope"]
-        for path in models.glob("*/model.json")
+def scope_index(models: Path) -> list[dict[str, Any]]:
+    """Each trained scope under models/ (<id>/model.json): its id, name and location names.
+
+    The page searches every city's locations from this one list, so it is small: names
+    only; a city's weights load when one of its locations is chosen.
+    """
+    found = [json.loads(path.read_text(encoding="utf-8")) for path in models.glob("*/model.json")]
+    index = [
+        {
+            "id": m["scope"]["id"],
+            "name": m["scope"]["name"],
+            "locations": sorted((n for n in m["locations"] if n != OTHER), key=str.casefold),
+        }
+        for m in found
     ]
-    return sorted(({"id": s["id"], "name": s["name"]} for s in found), key=lambda s: s["name"])
+    return sorted(index, key=lambda s: str(s["name"]))
 
 
 def export(trained: Trained, scope: dict[str, Any], data_sha256: str) -> dict[str, Any]:
