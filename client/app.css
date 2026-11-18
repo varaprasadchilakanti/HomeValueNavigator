@@ -172,7 +172,8 @@ input:-webkit-autofill {
 .segments {
     position: relative;
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
     gap: 4px;
     padding: 4px;
     background: var(--bg);
@@ -187,7 +188,7 @@ input:-webkit-autofill {
     cursor: pointer;
     transition: background-color 0.15s, color 0.15s;
 }
-.segments label:hover { background: var(--royal-soft); }
+.segments label:hover { background: var(--royal-soft); box-shadow: inset 0 0 0 1px var(--royal); }
 .segments input:checked + label { background: var(--royal); color: var(--on-royal); font-weight: 600; }
 .segments input:focus-visible + label { outline: 2px solid var(--royal); outline-offset: 2px; }
 .segments input:disabled + label { opacity: 0.35; cursor: not-allowed; background: none; }
@@ -211,9 +212,13 @@ input:-webkit-autofill {
     box-shadow: var(--shadow);
 }
 [role="option"] { padding: 9px 12px; border-radius: 6px; cursor: pointer; }
-[role="option"][aria-selected="true"], [role="option"]:hover { background: var(--royal-soft); }
+/* The active option carries a bar in --royal too: the tint alone is under 3:1 (WCAG 1.4.11). */
+[role="option"][aria-selected="true"], [role="option"]:not(.empty):hover {
+    background: var(--royal-soft);
+    box-shadow: inset 3px 0 0 var(--royal);
+}
 [role="option"] mark { background: none; color: var(--royal); font-weight: 600; }
-.empty { padding: 9px 12px; color: var(--muted); }
+.empty { color: var(--muted); cursor: default; }
 
 /* Result */
 .result { position: sticky; top: 20px; border-top: 3px solid var(--gold); }

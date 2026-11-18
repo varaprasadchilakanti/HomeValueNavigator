@@ -29,8 +29,11 @@ function loadModel(raw) {
     const within = raw?.scores?.held_out?.median_abs_pct_error;
     const tested = raw?.scores?.held_out?.rows;
     const numbers = [raw?.intercept, w?.log_total_sqft, w?.bath, w?.bhk, within, tested,
-        b?.min_sqft_per_bhk, b?.max_sqft, b?.max_extra_bath];
+        b?.min_sqft_per_bhk, b?.max_extra_bath];
     if (!numbers.every(isNumber) || typeof raw.locations !== "object" || !raw.locations) return null;
+    if (typeof b.max_sqft_by_bhk !== "object" || !b.max_sqft_by_bhk) return null;
+    const largest = new Map(Object.entries(b.max_sqft_by_bhk)
+        .filter(([, v]) => isNumber(v)).map(([k, v]) => [Number(k), v]));
     const offsets = new Map(Object.entries(raw.locations).filter(([, v]) => isNumber(v)));
     const names = [...offsets.keys()].filter((n) => n !== OTHER).sort((a, c) => a.localeCompare(c));
     if (!names.includes(raw.default_location)) return null;
@@ -38,7 +41,7 @@ function loadModel(raw) {
         estimate: (sqft, bhk, bath, place) => Math.exp(raw.intercept + w.log_total_sqft * Math.log(sqft)
             + w.bath * bath + w.bhk * bhk + offsets.get(place)),
         names, within, tested, defaultLocation: raw.default_location,
-        minPerBhk: b.min_sqft_per_bhk, maxSqft: b.max_sqft, extraBath: b.max_extra_bath,
+        minPerBhk: b.min_sqft_per_bhk, largest, extraBath: b.max_extra_bath,
     };
 }
 
@@ -82,10 +85,11 @@ function span(low, high) {
     return `${a} ${DASH} ${b}`;
 }
 
-/** Digits, optionally with commas, spaces or one decimal point; anything else is NaN. */
+/** ASCII digits and one optional decimal part, once spaces at the ends and thousands commas
+ *  are removed; anything else is NaN. The same rule as _number in src/homevalue/model.py. */
 function parseArea(text) {
-    const cleaned = text.replace(/[,\s]/g, "");
-    return /^\d+(\.\d+)?$/.test(cleaned) ? Number(cleaned) : NaN;
+    const cleaned = text.trim().replaceAll(",", "");
+    return /^[0-9]+(\.[0-9]+)?$/.test(cleaned) ? Number(cleaned) : NaN;
 }
 
 // ---------------------------------------------------------------- the page
@@ -105,8 +109,8 @@ function main() {
     let active = -1;
     let shown = [];
 
-    function addSegments(name, start) {
-        for (let i = 1; i <= CHOICES; i += 1) {
+    function addSegments(name, start, counts) {
+        for (const i of counts) {
             const input = Object.assign(document.createElement("input"), {
                 type: "radio", name, id: `${name}-${i}`, value: String(i), checked: i === start,
                 className: "sr-only",
@@ -141,7 +145,10 @@ function main() {
 
     function areaProblem(sqft, bhk) {
         if (!Number.isFinite(sqft)) return "Enter the area in square feet, for example 1200.";
-        if (sqft > model.maxSqft) return `Enter an area up to ${model.maxSqft.toLocaleString("en-IN")} sq ft.`;
+        const most = model.largest.get(bhk);
+        if (sqft > most) {
+            return `The largest ${bhk} BHK listing in the data is ${most.toLocaleString("en-IN")} sq ft; enter an area up to that.`;
+        }
         const least = model.minPerBhk * bhk;
         if (sqft < least) return `A ${bhk} BHK home needs at least ${least.toLocaleString("en-IN")} sq ft.`;
         return null;
@@ -201,13 +208,21 @@ function main() {
         return item;
     }
 
+    // A listbox may own only options, so the empty message is one that cannot be chosen.
+    function noMatch() {
+        const item = Object.assign(document.createElement("li"), { className: "empty", textContent: "No matching location" });
+        item.setAttribute("role", "option");
+        item.setAttribute("aria-disabled", "true");
+        return item;
+    }
+
     function render() {
         shown = matches(location.value);
         if (!location.value.trim()) return setOpen(false);
         const q = key(location.value);
         list.replaceChildren(...(shown.length > 0
             ? shown.map((name, i) => option(name, i, q))
-            : [Object.assign(document.createElement("li"), { className: "empty", textContent: "No matching location" })]));
+            : [noMatch()]));
         if (active >= 0) location.setAttribute("aria-activedescendant", `location-option-${active}`);
         return setOpen(true);
     }
@@ -243,8 +258,9 @@ function main() {
     });
 
     // ---- the rest of the form
-    addSegments("bhk", 2);
-    addSegments("bath", 2);
+    const upTo = (n) => Array.from({ length: n }, (_, i) => i + 1);
+    addSegments("bhk", 2, upTo(CHOICES).filter((n) => model.largest.has(n)));
+    addSegments("bath", 2, upTo(CHOICES + model.extraBath));
     limitBaths();
     byId("sqft").addEventListener("blur", () => { touched.sqft = true; update(); });
     byId("form").addEventListener("input", (e) => {
@@ -261,5 +277,9 @@ function main() {
     update();
 }
 
-setUpTheme();
-main();
+if (typeof document !== "undefined") {
+    setUpTheme();
+    main();
+} else if (typeof module !== "undefined") {
+    module.exports = { loadModel, parseArea, money, span }; // for tests/page_parity.js
+}

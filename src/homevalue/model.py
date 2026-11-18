@@ -12,12 +12,16 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 #: The pooled bucket for rare locations: the baseline of the fit, not a place to ask about.
 OTHER = "other"
+#: A number sent as text: ASCII digits and one optional decimal part, once spaces at the
+#: ends and thousands commas are removed. The page applies the same rule (app.js, parseArea).
+_DIGITS = re.compile(r"[0-9]+(\.[0-9]+)?")
 
 
 class InvalidInputError(ValueError):
@@ -37,9 +41,19 @@ class Bounds:
     """The ranges the training data covered, as `train.py` wrote them."""
 
     min_sqft_per_bhk: float
-    max_sqft: float
-    max_bhk: int
+    #: The largest area listed for each bedroom count the data has; a count it lacks is refused.
+    max_sqft_by_bhk: dict[int, float]
     max_extra_bath: int
+
+
+@dataclass(frozen=True, slots=True)
+class Estimate:
+    """A price with its typical range, in lakh INR, and the location it was priced for."""
+
+    location: str
+    price: float
+    low: float
+    high: float
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,7 +67,7 @@ class PriceModel:
     locations: dict[str, float]
     bounds: Bounds
     #: Median absolute percentage error on held-out listings: half of the estimates
-    #: were within this fraction of the listed price.
+    #: were within this fraction of the asking price.
     median_error: float
     _index: dict[str, str] = field(init=False, repr=False, compare=False)
 
@@ -75,8 +89,7 @@ class PriceModel:
             locations={k: float(v) for k, v in data["locations"].items()},
             bounds=Bounds(
                 min_sqft_per_bhk=float(bounds["min_sqft_per_bhk"]),
-                max_sqft=float(bounds["max_sqft"]),
-                max_bhk=int(bounds["max_bhk"]),
+                max_sqft_by_bhk={int(k): float(v) for k, v in bounds["max_sqft_by_bhk"].items()},
                 max_extra_bath=int(bounds["max_extra_bath"]),
             ),
             median_error=float(data["scores"]["held_out"]["median_abs_pct_error"]),
@@ -86,10 +99,17 @@ class PriceModel:
         """The locations a price can be asked for, sorted."""
         return sorted(self._index.values())
 
+    def estimate(self, location: object, sqft: object, bhk: object, bath: object) -> Estimate:
+        """The price and its typical range: about half of held-out prices fell within it."""
+        place = self.location_name(location)
+        price = self.predict(place, sqft, bhk, bath)
+        spread = price * self.median_error
+        return Estimate(place, price, round(price - spread, 2), round(price + spread, 2))
+
     def predict(self, location: object, sqft: object, bhk: object, bath: object) -> float:
         """Price in lakh rupees, rounded to two places, or InvalidInputError saying why not."""
         place = self.location_name(location)
-        rooms = _whole("bhk", bhk, 1, self.bounds.max_bhk)
+        rooms = self._bedrooms(bhk)
         baths = _whole("bath", bath, 1, rooms + self.bounds.max_extra_bath)
         area = self._area(_number("total_sqft", sqft), rooms)
         log_price = (
@@ -110,10 +130,19 @@ class PriceModel:
             raise InvalidInputError(f"{value.strip()!r} is not a listed location.", "location")
         return name
 
+    def _bedrooms(self, value: object) -> int:
+        rooms = _whole("bhk", value, 1, max(self.bounds.max_sqft_by_bhk))
+        if rooms not in self.bounds.max_sqft_by_bhk:
+            raise InvalidInputError(f"No listing in the data has {rooms} bedrooms.", "bhk")
+        return rooms
+
     def _area(self, sqft: float, bhk: int) -> float:
-        if sqft > self.bounds.max_sqft:
+        most = self.bounds.max_sqft_by_bhk[bhk]
+        if sqft > most:
             raise InvalidInputError(
-                f"total_sqft must be at most {self.bounds.max_sqft:,.0f}.", "total_sqft"
+                f"total_sqft must be at most {most:,.0f} for {bhk} BHK, "
+                "the largest such listing in the data.",
+                "total_sqft",
             )
         least = self.bounds.min_sqft_per_bhk
         if sqft < least * bhk:
@@ -130,12 +159,18 @@ def _key(name: str) -> str:
 
 
 def _number(name: str, value: object) -> float:
-    if isinstance(value, bool) or not isinstance(value, int | float | str):
-        raise InvalidInputError(f"{name} must be a number.", name)
+    """A JSON number, or text in the form `_DIGITS` allows; anything else is refused."""
+    if isinstance(value, str):
+        text = value.strip().replace(",", "")
+        if not _DIGITS.fullmatch(text):
+            raise InvalidInputError(f"{name} must be a number, such as 1200.", name)
+        value = text
+    elif isinstance(value, bool) or not isinstance(value, int | float):
+        raise InvalidInputError(f"{name} must be a number, such as 1200.", name)
     try:
         number = float(value)
-    except ValueError:
-        raise InvalidInputError(f"{name} must be a number.", name) from None
+    except OverflowError:
+        raise InvalidInputError(f"{name} is too large.", name) from None
     if not math.isfinite(number):
         raise InvalidInputError(f"{name} must be a finite number.", name)
     return number

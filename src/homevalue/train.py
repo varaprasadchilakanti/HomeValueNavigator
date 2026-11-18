@@ -70,20 +70,26 @@ def sqft_to_number(value: str) -> float | None:
 
 
 def clean(raw: pd.DataFrame) -> pd.DataFrame:
-    """Homes measured by floor area, then the course's cleaning in its order.
+    """Homes measured by floor area, then the course's cleaning in its order, once each.
 
     Plot-area listings measure land, not floor space, so the same number means a
-    different thing; the course kept them, this model does not.
+    different thing; the course kept them, this model does not. An exact repeat of a
+    listing is dropped, so the same home cannot sit on both sides of the split.
     """
     raw = raw[raw["area_type"] != PLOT_AREA]
     df = raw.drop(columns=["area_type", "availability", "society", "balcony"]).dropna()
     df = df.assign(bhk=df["size"].map(lambda s: int(str(s).split(" ")[0])))
     df = df.assign(total_sqft=df["total_sqft"].map(lambda s: sqft_to_number(str(s)))).dropna()
-    df = df.assign(location=df["location"].str.strip())
+    df = df.assign(location=df["location"].map(lambda s: " ".join(str(s).split())))
     df = df.assign(price_per_sqft=df["price"] * LAKH / df["total_sqft"])
-    counts = df["location"].value_counts()
-    rare = set(counts[counts <= RARE_LOCATION].index)
-    return df.assign(location=df["location"].where(~df["location"].isin(rare), OTHER))
+    return df.drop_duplicates()
+
+
+def pool_rare(rows: pd.DataFrame, counted: pd.DataFrame) -> pd.DataFrame:
+    """Locations with RARE_LOCATION or fewer listings in `counted` become OTHER."""
+    counts = counted["location"].value_counts()
+    common = set(counts[counts > RARE_LOCATION].index)
+    return rows.assign(location=rows["location"].where(rows["location"].isin(common), OTHER))
 
 
 def plausible(df: pd.DataFrame) -> pd.DataFrame:
@@ -158,9 +164,20 @@ def evaluate(y: np.ndarray, predicted: np.ndarray) -> dict[str, float]:
 
 
 def held_out(y: np.ndarray, predicted: np.ndarray) -> dict[str, Any]:
-    """`evaluate`, plus a 95% bootstrap interval on the median error, seeded so it repeats."""
-    medians = np.median(_error(y, predicted)[_draws(len(y))], axis=1)
-    return {**evaluate(y, predicted), "median_abs_pct_error_95ci": _interval(medians)}
+    """`evaluate`, with a 95% bootstrap interval on the median error and range coverage.
+
+    Coverage is how often the typical range, the estimate plus or minus that error, holds
+    the asking price: about half, if the range means what the page says.
+    """
+    error = _error(y, predicted)
+    medians = np.median(error[_draws(len(y))], axis=1)
+    band = float(np.median(error))
+    inside = np.abs(y - predicted) <= band * predicted
+    return {
+        **evaluate(y, predicted),
+        "median_abs_pct_error_95ci": _interval(medians),
+        "range_coverage": round(float(np.mean(inside)), 4),
+    }
 
 
 def lead(y: np.ndarray, ours: np.ndarray, other: np.ndarray) -> list[float]:
@@ -218,11 +235,14 @@ class Trained:
 def train(df: pd.DataFrame) -> Trained:
     """Split first, fit on the training rows, score on the untouched test rows.
 
-    Cross-validation runs on the training rows only, so the test rows are scored once.
+    Rare locations are pooled by their count in the training rows, and cross-validation
+    runs on the training rows only, so the test rows inform nothing and are scored once.
     """
-    df = plausible(df)
-    locations = sorted(df["location"].unique())
-    train_rows, test_rows = train_test_split(df, test_size=TEST_SIZE, random_state=SPLIT_SEED)
+    train_rows, test_rows = train_test_split(
+        plausible(df), test_size=TEST_SIZE, random_state=SPLIT_SEED
+    )
+    train_rows, test_rows = pool_rare(train_rows, train_rows), pool_rare(test_rows, train_rows)
+    locations = sorted(set(train_rows["location"]) | {OTHER})
     x_train, y_train = features(train_rows, locations)
     x_test, y_test = features(test_rows, locations)
     model = fit(x_train, y_train)
@@ -282,8 +302,10 @@ def export(trained: Trained, data_sha256: str) -> dict[str, Any]:
         "unit": "lakh INR",
         "bounds": {
             "min_sqft_per_bhk": MIN_SQFT_PER_BHK,
-            "max_sqft": float(rows["total_sqft"].max()),
-            "max_bhk": int(rows["bhk"].max()),
+            "max_sqft_by_bhk": {
+                str(bhk): float(most)
+                for bhk, most in rows.groupby("bhk")["total_sqft"].max().items()
+            },
             "max_extra_bath": MAX_EXTRA_BATH,
         },
         "scores": trained.scores,

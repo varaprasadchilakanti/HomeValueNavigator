@@ -29,6 +29,17 @@ def test_a_stored_name_with_a_double_space_still_matches(
 
 def test_numbers_may_arrive_as_text_from_a_form(model: PriceModel) -> None:
     assert model.predict("Hebbal", "1000", "2", "2") == 50.0
+    assert model.predict("Hebbal", " 1,000 ", 2, 2) == 50.0
+
+
+def test_an_estimate_carries_its_typical_range_and_the_matched_name(model: PriceModel) -> None:
+    estimate = model.estimate("whitefield", 1000, 2, 2)
+    assert (estimate.location, estimate.price, estimate.low, estimate.high) == (
+        "Whitefield",
+        75.0,
+        60.0,
+        90.0,
+    )
 
 
 def test_the_pooled_bucket_is_not_a_place(model: PriceModel) -> None:
@@ -54,7 +65,18 @@ def test_an_unknown_location_is_refused_not_priced_as_none(model: PriceModel) ->
         pytest.param(("Hebbal", " ", 2, 2), "total_sqft", "must be a number", id="blank"),
         pytest.param(("Hebbal", None, 2, 2), "total_sqft", "must be a number", id="missing"),
         pytest.param(("Hebbal", [1000], 2, 2), "total_sqft", "must be a number", id="list"),
-        pytest.param(("Hebbal", "-1000", 2, 2), "total_sqft", "at least 300", id="negative"),
+        pytest.param(("Hebbal", -1000, 2, 2), "total_sqft", "at least 300", id="negative"),
+        pytest.param(("Hebbal", "-1000", 2, 2), "total_sqft", "must be a number", id="signed-text"),
+        pytest.param(("Hebbal", "1e3", 2, 2), "total_sqft", "must be a number", id="exponent"),
+        pytest.param(("Hebbal", "1_200", 2, 2), "total_sqft", "must be a number", id="underscore"),
+        pytest.param(
+            ("Hebbal", "\u0661\u0662\u0660\u0660", 2, 2),
+            "total_sqft",
+            "must be a number",
+            id="non-ascii-digits",
+        ),
+        pytest.param(("Hebbal", 10**400, 2, 2), "total_sqft", "too large", id="huge-integer"),
+        pytest.param(("Hebbal", 1000, 10**400, 2), "bhk", "too large", id="huge-bhk"),
         pytest.param(("Hebbal", 10**9, 2, 2), "total_sqft", "at most 30,000", id="huge"),
         pytest.param(("Hebbal", 1000, 2.5, 2), "bhk", "whole number from 1 to 10", id="half-bhk"),
         pytest.param(("Hebbal", 1000, 0, 1), "bhk", "whole number from 1 to 10", id="zero-bhk"),
@@ -97,7 +119,11 @@ def test_a_model_file_without_its_accuracy_is_refused(
 
 def test_the_bounds_are_read_from_the_model_file(tmp_path: Path, small: dict[str, object]) -> None:
     """The limits travel with the weights, so a retrained model brings its own."""
-    bounds = {"min_sqft_per_bhk": 500, "max_sqft": 30000.0, "max_bhk": 10, "max_extra_bath": 0}
+    bounds = {
+        "min_sqft_per_bhk": 500,
+        "max_sqft_by_bhk": {"1": 2000.0, "2": 3000.0, "4": 9000.0},
+        "max_extra_bath": 0,
+    }
     path = tmp_path / "model.json"
     path.write_text(json.dumps(small | {"bounds": bounds}))
     model = PriceModel.from_json(path)
@@ -105,3 +131,8 @@ def test_the_bounds_are_read_from_the_model_file(tmp_path: Path, small: dict[str
         model.predict("Hebbal", 900, 2, 2)
     with pytest.raises(InvalidInputError, match="whole number from 1 to 2"):
         model.predict("Hebbal", 1000, 2, 3)
+    with pytest.raises(InvalidInputError, match="at most 2,000 for 1 BHK"):
+        model.predict("Hebbal", 2500, 1, 1)
+    with pytest.raises(InvalidInputError, match="No listing in the data has 3 bedrooms"):
+        model.predict("Hebbal", 2500, 3, 3)
+    assert model.predict("Hebbal", 9000, 4, 4) > 0

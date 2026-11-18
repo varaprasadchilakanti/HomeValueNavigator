@@ -16,7 +16,11 @@ SMALL: dict[str, object] = {
     "intercept": math.log(0.05),
     "coefficients": {"log_total_sqft": 1.0, "bath": 0.0, "bhk": 0.0},
     "locations": {"other": 0.0, "Whitefield": math.log(1.5), "Hebbal": 0.0},
-    "bounds": {"min_sqft_per_bhk": 300, "max_sqft": 30000.0, "max_bhk": 10, "max_extra_bath": 1},
+    "bounds": {
+        "min_sqft_per_bhk": 300,
+        "max_sqft_by_bhk": {str(bhk): 30000.0 for bhk in range(1, 11)},
+        "max_extra_bath": 1,
+    },
     "scores": {"held_out": {"median_abs_pct_error": 0.2}},
 }
 
