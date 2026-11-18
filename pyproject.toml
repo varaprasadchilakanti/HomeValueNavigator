@@ -16,7 +16,7 @@ Changelog = "https://github.com/varaprasadchilakanti/HomeValueNavigator/blob/mai
 
 [dependency-groups]
 # Training needs the data stack; serving a prediction does not.
-train = ["numpy>=2.1", "pandas>=2.2", "scikit-learn>=1.5"]
+train = ["numpy>=2.1", "pandas>=2.2", "scikit-learn>=1.5", "scipy>=1.13"]
 # A production WSGI server; waitress runs on Linux, macOS and Windows alike.
 serve = ["waitress>=3.0"]
 dev = [
@@ -71,8 +71,8 @@ warn_unused_ignores = true
 warn_return_any = true
 
 [[tool.mypy.overrides]]
-# scikit-learn ships no type information; only train.py imports it.
-module = ["sklearn", "sklearn.*"]
+# scikit-learn and SciPy ship no type information; only train.py imports them.
+module = ["sklearn", "sklearn.*", "scipy", "scipy.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

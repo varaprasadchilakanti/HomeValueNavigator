@@ -278,6 +278,8 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
     { name = "scikit-learn" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 serve = [
     { name = "waitress" },
@@ -287,6 +289,8 @@ train = [
     { name = "numpy", version = "2.5.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pandas" },
     { name = "scikit-learn" },
+    { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
 ]
 
 [package.metadata]
@@ -302,12 +306,14 @@ dev = [
     { name = "pytest-cov", specifier = ">=6.0" },
     { name = "ruff", specifier = ">=0.8" },
     { name = "scikit-learn", specifier = ">=1.5" },
+    { name = "scipy", specifier = ">=1.13" },
 ]
 serve = [{ name = "waitress", specifier = ">=3.0" }]
 train = [
     { name = "numpy", specifier = ">=2.1" },
     { name = "pandas", specifier = ">=2.2" },
     { name = "scikit-learn", specifier = ">=1.5" },
+    { name = "scipy", specifier = ">=1.13" },
 ]
 
 [[package]]

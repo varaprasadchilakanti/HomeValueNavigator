@@ -28,6 +28,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MODEL = ROOT / "model" / "model.json"
 CLIENT = ("app.html", "app.css", "theme.js", "app.js", "favicon.svg")
 PAGE = [ROOT / "client" / n for n in CLIENT] + [MODEL.with_suffix(".js")]
+# The root index.html only redirects, so it is not counted.
 QUERY = {"location": "Whitefield", "total_sqft": 1200, "bhk": 2, "bath": 2}
 
 
