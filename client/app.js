@@ -36,7 +36,7 @@ function loadModel(raw) {
         .filter(([, v]) => isNumber(v)).map(([k, v]) => [Number(k), v]));
     const offsets = new Map(Object.entries(raw.locations).filter(([, v]) => isNumber(v)));
     const names = [...offsets.keys()].filter((n) => n !== OTHER).sort((a, c) => a.localeCompare(c));
-    if (!names.includes(raw.default_location)) return null;
+    if (!names.includes(raw.default_location) || largest.size === 0) return null;
     return {
         estimate: (sqft, bhk, bath, place) => Math.exp(raw.intercept + w.log_total_sqft * Math.log(sqft)
             + w.bath * bath + w.bhk * bhk + offsets.get(place)),
