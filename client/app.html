@@ -48,21 +48,13 @@
 
     <form id="form" class="panel" novalidate autocomplete="off">
         <div class="field">
-            <label for="sqft">Area <span class="hint">sq ft, as listed</span></label>
-            <input id="sqft" type="text" inputmode="numeric" value="1200"
-                   aria-describedby="sqft-error">
-            <p class="field-error" id="sqft-error" hidden></p>
+            <label for="city" id="city-label">City</label>
+            <div class="select-box" id="city-box" hidden>
+                <select id="city"></select>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+            </div>
+            <p class="static" id="city-only"></p>
         </div>
-
-        <fieldset class="field">
-            <legend>Bedrooms <span class="hint">BHK</span></legend>
-            <div class="segments" id="bhk"></div>
-        </fieldset>
-
-        <fieldset class="field">
-            <legend>Bathrooms</legend>
-            <div class="segments" id="bath"></div>
-        </fieldset>
 
         <div class="field">
             <label for="location">Location</label>
@@ -79,6 +71,23 @@
             </div>
             <p class="field-error" id="location-error" hidden></p>
         </div>
+
+        <div class="field">
+            <label for="sqft">Area <span class="hint">sq ft, as listed</span></label>
+            <input id="sqft" type="text" inputmode="numeric" value="1200"
+                   aria-describedby="sqft-error">
+            <p class="field-error" id="sqft-error" hidden></p>
+        </div>
+
+        <fieldset class="field">
+            <legend>Bedrooms <span class="hint">BHK</span></legend>
+            <div class="segments" id="bhk"></div>
+        </fieldset>
+
+        <fieldset class="field">
+            <legend>Bathrooms</legend>
+            <div class="segments" id="bath"></div>
+        </fieldset>
     </form>
 
     <section class="panel result">
@@ -100,7 +109,7 @@
 </footer>
 
 <noscript><p class="foot">The estimate is computed with JavaScript; please enable it.</p></noscript>
-<script src="../model/bengaluru/model.js"></script>
+<script src="../model/scopes.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

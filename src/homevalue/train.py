@@ -45,6 +45,7 @@ from homevalue.model import OTHER
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCOPE = "bengaluru"
 BROWSER_GLOBAL = "window.HOMEVALUE_MODEL"
+SCOPES_GLOBAL = "window.HOMEVALUE_SCOPES"
 #: The 2024 notebook's split and seed.
 TEST_SIZE = 0.2
 SPLIT_SEED = 10
@@ -309,6 +310,15 @@ def model_path(scope: dict[str, Any], root: Path = ROOT) -> Path:
     return root / "model" / str(scope["id"]) / "model.json"
 
 
+def scope_index(models: Path) -> list[dict[str, str]]:
+    """Each trained scope under models/ (models/<id>/model.json) as its id and name, by name."""
+    found = [
+        json.loads(path.read_text(encoding="utf-8"))["scope"]
+        for path in models.glob("*/model.json")
+    ]
+    return sorted(({"id": s["id"], "name": s["name"]} for s in found), key=lambda s: s["name"])
+
+
 def export(trained: Trained, scope: dict[str, Any], data_sha256: str) -> dict[str, Any]:
     """Everything a prediction needs, its bounds, its scope, and where it came from."""
     model, rows = trained.model, trained.rows
@@ -360,6 +370,9 @@ def main(argv: list[str] | None = None) -> int:
     out.write_text(text + "\n", encoding="utf-8")
     # The same weights as a script: browsers refuse to fetch a JSON file from disk.
     out.with_suffix(".js").write_text(f"{BROWSER_GLOBAL} = {text};\n", encoding="utf-8")
+    # The page's list of cities: every model beside this one, so a new scope needs no code.
+    index = json.dumps(scope_index(out.parent.parent), indent=1)
+    (out.parent.parent / "scopes.js").write_text(f"{SCOPES_GLOBAL} = {index};\n", encoding="utf-8")
     ours, course = trained.scores["held_out"], trained.scores["course_method"]
     print(
         f"{out}: half of held-out estimates within {ours['median_abs_pct_error']:.1%} "

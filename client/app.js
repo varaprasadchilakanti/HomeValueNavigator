@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Estimates in the browser from the model's weights (model/<scope>/model.js, written with
-// model.json by src/homevalue/train.py). The checks follow src/homevalue/model.py
+// model.json by src/homevalue/train.py). The city comes from model/scopes.js, the list of
+// trained scopes, and the address (?city=<id>), so a link opens the same city. The checks follow src/homevalue/model.py
 // and read the same bounds; the page offers 1 to 5 bedrooms and opens on the location
 // with the most listings. Text is set with
 // textContent only.
@@ -14,6 +15,7 @@ const OTHER = "other";
 const LAKH = 100000;
 const RATE_STEP = 50; // rupees; the rate is an estimate, not a quote
 const EM_DASH = "\u2014";
+const SCOPE_ID = /^[a-z0-9-]+$/; // a folder name; it becomes part of a script address
 
 const byId = (id) => document.getElementById(id);
 const key = (name) => name.trim().split(/\s+/).join(" ").toLowerCase();
@@ -40,13 +42,21 @@ function loadModel(raw) {
     // need their own formatting before this page can show it.
     const scope = raw.scope;
     if (scope?.currency !== "INR" || scope?.price_unit !== "lakh" || scope?.area_unit !== "sq ft"
-        || typeof scope?.name !== "string") return null;
+        || typeof scope?.id !== "string") return null;
     return {
         estimate: (sqft, bhk, bath, place) => Math.exp(raw.intercept + w.log_total_sqft * Math.log(sqft)
             + w.bath * bath + w.bhk * bhk + offsets.get(place)),
-        names, within, tested, defaultLocation: raw.default_location, scopeName: scope.name,
+        names, within, tested, defaultLocation: raw.default_location, scopeId: scope.id,
         minPerBhk: b.min_sqft_per_bhk, largest, extraBath: b.max_extra_bath,
     };
+}
+
+/** The trusted scopes from scopes.js and the one the address asks for, else the first. */
+function chooseScope(raw, search) {
+    const list = (Array.isArray(raw) ? raw : [])
+        .filter((s) => typeof s?.name === "string" && typeof s?.id === "string" && SCOPE_ID.test(s.id));
+    const asked = new URLSearchParams(search).get("city");
+    return { list, current: list.find((s) => s.id === asked) ?? list[0] ?? null };
 }
 
 // ---------------------------------------------------------------- theme
@@ -98,13 +108,45 @@ function parseArea(text) {
 
 // ---------------------------------------------------------------- the page
 
-function main() {
-    const model = loadModel(window.HOMEVALUE_MODEL);
-    if (!model) {
-        byId("range").textContent = "The model did not load. Try reloading the page.";
-        document.querySelectorAll("#form input").forEach((input) => { input.disabled = true; });
+function failed() {
+    byId("range").textContent = "The model did not load. Try reloading the page.";
+    document.querySelectorAll("#form input, #form select").forEach((input) => { input.disabled = true; });
+}
+
+/** One city is shown as text; from two, a select that reopens the page on the new city. */
+function setUpCity(list, current) {
+    byId("scope-name").textContent = current.name;
+    byId("city-only").textContent = current.name;
+    if (list.length < 2) {
+        byId("city-label").removeAttribute("for");
         return;
     }
+    const select = byId("city");
+    select.append(...list.map((s) => new Option(s.name, s.id, false, s.id === current.id)));
+    select.addEventListener("change", () => {
+        const url = new URL(window.location.href);
+        url.searchParams.set("city", select.value);
+        window.location.assign(url);
+    });
+    byId("city-only").hidden = true;
+    byId("city-box").hidden = false;
+}
+
+/** Shows the cities, then loads the chosen one's model and starts the form. */
+function start() {
+    setUpTheme();
+    const { list, current } = chooseScope(window.HOMEVALUE_SCOPES, window.location.search);
+    if (!current) return failed();
+    setUpCity(list, current);
+    const script = Object.assign(document.createElement("script"), { src: `../model/${current.id}/model.js` });
+    script.addEventListener("load", () => main(current.id));
+    script.addEventListener("error", failed);
+    document.body.append(script);
+}
+
+function main(scopeId) {
+    const model = loadModel(window.HOMEVALUE_MODEL);
+    if (!model || model.scopeId !== scopeId) return failed();
     const byKey = new Map(model.names.map((n) => [key(n), n]));
     const touched = { sqft: false, location: false };
     const location = byId("location");
@@ -316,16 +358,14 @@ function main() {
     location.placeholder = `Search ${model.names.length} locations`;
     location.value = model.defaultLocation;
     chosenLocation = model.defaultLocation;
-    byId("scope-name").textContent = model.scopeName;
     byId("accuracy").textContent = `Tested on ${model.tested.toLocaleString("en-IN")} listings it had `
         + `not seen, half of its estimates were within ${Math.round(model.within * 100)}% of the `
         + "asking price. The typical range is that band; the other half fall outside it.";
-    update();
+    return update();
 }
 
 if (typeof document !== "undefined") {
-    setUpTheme();
-    main();
+    start();
 } else if (typeof module !== "undefined") {
-    module.exports = { loadModel, parseArea, money, span }; // for tests/page_parity.js
+    module.exports = { loadModel, chooseScope, parseArea, money, span }; // for tests/page_parity.js
 }

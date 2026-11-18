@@ -19,4 +19,5 @@ const area = (text) => {
 process.stdout.write(JSON.stringify({
     estimates: cases.estimates.map(([place, sqft, bhk, bath]) => model.estimate(sqft, bhk, bath, place)),
     areas: cases.areas.map(area),
+    cities: cases.cities.map(([raw, search]) => page.chooseScope(raw, search).current?.id ?? null),
 }));

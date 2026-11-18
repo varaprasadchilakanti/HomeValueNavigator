@@ -21,6 +21,15 @@
     --error: light-dark(#ba2c25, #f47c6e);
     --shade: light-dark(rgb(25 32 57 / 6%), rgb(0 0 0 / 35%));
     --shadow: 0 1px 2px var(--shade), 0 10px 30px var(--shade);
+
+    /* One family, the platform's own UI face; system-ui is left out for its fallbacks on
+       Windows in Chinese and Japanese. Sizes step by 1.25 from a 16px body (major third). */
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Roboto, Helvetica, Arial, sans-serif;
+    --text-sm: 0.875rem;   /* hints, notes, the footer */
+    --text-md: 1rem;       /* body, labels, fields */
+    --text-lg: 1.25rem;    /* the range under the price */
+    --text-xl: 1.953rem;   /* the heading */
+    --text-2xl: 2.441rem;  /* the price */
 }
 :root[data-theme="light"] { color-scheme: light; }
 :root[data-theme="dark"] { color-scheme: dark; }
@@ -37,7 +46,7 @@ body {
     flex-direction: column;
     background: var(--bg);
     color: var(--ink);
-    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font: var(--text-md)/1.55 var(--font);
     -webkit-font-smoothing: antialiased;
 }
 
@@ -59,7 +68,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--royal); outline
 /* Header */
 .bar, .layout, .foot { max-width: 980px; width: 100%; margin: 0 auto; padding-inline: 20px; }
 .bar { display: flex; align-items: center; justify-content: space-between; padding-top: 20px; }
-.brand { font-weight: 650; letter-spacing: -0.01em; }
+.brand { font-weight: 650; }
 
 .theme {
     position: relative;
@@ -97,11 +106,10 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--royal); outline
 .intro { grid-column: 1 / -1; }
 h1 {
     margin: 0 0 6px;
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    font-size: clamp(1.75rem, 4vw, 2.5rem);
-    font-weight: 600;
-    line-height: 1.15;
-    letter-spacing: -0.01em;
+    font-size: clamp(1.563rem, 3.2vw, var(--text-xl));
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
 }
 .intro p { margin: 0; color: var(--muted); }
 
@@ -116,10 +124,10 @@ h1 {
 /* Form */
 form { display: grid; gap: 22px; }
 .field { display: grid; gap: 8px; border: 0; margin: 0; padding: 0; min-width: 0; }
-label, legend { font-weight: 600; font-size: 0.92rem; padding: 0; }
-.hint { font-weight: 400; color: var(--muted); margin-left: 4px; }
+label, legend { font-weight: 600; padding: 0; }
+.hint { font-weight: 400; font-size: var(--text-sm); color: var(--muted); margin-left: 4px; }
 
-input[type="text"] {
+input[type="text"], select {
     width: 100%;
     padding: 11px 14px;
     font: inherit;
@@ -136,7 +144,27 @@ input:-webkit-autofill {
     box-shadow: 0 0 0 100px var(--surface) inset;
 }
 
-.field-error { margin: 0; font-size: 0.88rem; color: var(--error); }
+.field-error { margin: 0; font-size: var(--text-sm); color: var(--error); }
+
+/* The city: text while there is one, a select (styled as the fields are) from two. */
+.static { margin: 0; font-weight: 500; }
+.select-box { position: relative; }
+select { appearance: none; padding-right: 44px; cursor: pointer; }
+select:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; border-color: var(--royal); }
+.select-box svg {
+    position: absolute;
+    top: 50%;
+    right: 13px;
+    width: 18px;
+    height: 18px;
+    transform: translateY(-50%);
+    pointer-events: none;
+    fill: none;
+    stroke: var(--muted);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
 
 .segments {
     position: relative;
@@ -151,16 +179,25 @@ input:-webkit-autofill {
 }
 .segments label {
     text-align: center;
-    padding: 8px 0;
+    padding: 7px 0;
+    border: 1px solid transparent;
     border-radius: 8px;
+    font-variant-numeric: tabular-nums;
     font-weight: 500;
     cursor: pointer;
     transition: background-color 0.15s, color 0.15s;
 }
 .segments label:hover { background: var(--royal-soft); box-shadow: inset 0 0 0 1px var(--royal); }
-.segments input:checked + label { background: var(--royal-fill); color: var(--on-royal); font-weight: 600; }
+/* Chosen: a fill, a border and bold, so it still reads where fills are dropped (print,
+   forced colors); WCAG 1.4.1, color is never the only cue. */
+.segments input:checked + label {
+    background: var(--royal-fill);
+    border-color: var(--royal-fill);
+    color: var(--on-royal);
+    font-weight: 700;
+}
 .segments input:focus-visible + label { outline: 2px solid var(--royal); outline-offset: 2px; }
-.segments input:disabled + label { opacity: 0.35; cursor: not-allowed; background: none; }
+.segments input:disabled + label { opacity: 0.35; cursor: not-allowed; background: none; box-shadow: none; }
 
 /* Location search: an ARIA combobox, so the list follows the theme (a datalist cannot). */
 .combo-box { position: relative; }
@@ -222,39 +259,57 @@ input:-webkit-autofill {
 .result { position: sticky; top: 20px; border-top: 3px solid var(--gold); }
 .result-label {
     margin: 0;
-    font-size: 0.78rem;
+    font-size: var(--text-sm);
     font-weight: 600;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--muted);
 }
 .price {
-    margin: 8px 0 2px;
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
-    font-size: clamp(2.3rem, 6vw, 3.1rem);
-    font-weight: 600;
+    margin: 6px 0 4px;
+    font-size: clamp(var(--text-xl), 5vw, var(--text-2xl));
+    font-weight: 700;
+    letter-spacing: -0.02em;
     line-height: 1.1;
     color: var(--gold);
     font-variant-numeric: tabular-nums;
 }
 .price.waiting { color: var(--muted); font-weight: 400; }
-.range { margin: 0; font-weight: 500; min-height: 1.55em; }
-.per-sqft { margin: 2px 0 0; font-size: 0.9rem; color: var(--muted); min-height: 1.4em; font-variant-numeric: tabular-nums; }
+.range { margin: 0; font-size: var(--text-lg); font-weight: 500; min-height: 1.55em; font-variant-numeric: tabular-nums; }
+.per-sqft { margin: 2px 0 0; font-size: var(--text-sm); color: var(--muted); min-height: 1.4em; font-variant-numeric: tabular-nums; }
 .accuracy {
     margin: 18px 0 14px;
     padding-top: 16px;
     border-top: 1px solid var(--line);
-    font-size: 0.9rem;
+    font-size: var(--text-sm);
     color: var(--muted);
 }
-.method { font-size: 0.9rem; font-weight: 500; }
+.method { font-size: var(--text-sm); font-weight: 500; }
 
 /* Footer */
-.foot { padding-bottom: 28px; font-size: 0.85rem; color: var(--muted); }
+.foot { padding-bottom: 28px; font-size: var(--text-sm); color: var(--muted); }
 
 @media (max-width: 760px) {
     .layout { grid-template-columns: 1fr; padding-block: 20px; }
     .result { position: static; }
+}
+
+/* Windows High Contrast and other forced colors drop fills and shadows: mark the chosen
+   segment and the active option with a system-colored border instead. */
+@media (forced-colors: active) {
+    .segments input:checked + label { border: 2px solid Highlight; }
+    [role="option"][aria-selected="true"] { outline: 2px solid Highlight; }
+}
+
+/* Paper: ink on white, no controls that do nothing there, the chosen segment outlined. */
+@media print {
+    :root { color-scheme: light; }
+    body { background: #fff; }
+    .theme, .combo-toggle, .select-box svg { display: none; }
+    .panel { box-shadow: none; }
+    .result { position: static; break-inside: avoid; }
+    .segments { background: none; }
+    .segments input:checked + label { background: none; color: var(--ink); border: 2px solid var(--ink); }
 }
 
 @media (prefers-reduced-motion: reduce) {

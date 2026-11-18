@@ -28,6 +28,16 @@ ESTIMATES = [
     ("Hebbal", 450, 1, 1),
     ("Sarjapur Road", 1800, 3, 3),
 ]
+TWO = [{"id": "bengaluru", "name": "Bengaluru"}, {"id": "pune", "name": "Pune"}]
+#: (the scope list, the address's query, the city the page should open on)
+CITIES = [
+    (TWO, "", "bengaluru"),
+    (TWO, "?city=pune", "pune"),
+    (TWO, "?city=delhi", "bengaluru"),
+    ([{"id": "../x", "name": "X"}, *TWO], "?city=../x", "bengaluru"),
+    ([{"id": "pune"}], "", None),
+    ("not a list", "", None),
+]
 AREAS = ["1200", " 1,200 ", "1200.5", "1e3", "1_200", "12 00", "-5", "1200.", "\u0661\u0662"]
 
 
@@ -37,7 +47,8 @@ def page_answers() -> dict[str, list[object]]:
         if os.environ.get("CI"):
             pytest.fail("Node is needed in CI to test the page.")
         pytest.skip("Node is not installed.")
-    cases = json.dumps({"estimates": ESTIMATES, "areas": AREAS})
+    cities = [[raw, search] for raw, search, _ in CITIES]
+    cases = json.dumps({"estimates": ESTIMATES, "areas": AREAS, "cities": cities})
     run = subprocess.run(
         [node, str(HARNESS)], input=cases, check=True, capture_output=True, text=True
     )
@@ -60,3 +71,8 @@ def test_the_page_reads_an_area_as_the_python_model_does() -> None:
         except InvalidInputError as refused:
             accepted = refused.field != "total_sqft"
         assert accepted == (read is not None), text
+
+
+def test_the_page_opens_only_a_listed_city_with_a_safe_id() -> None:
+    expected = [city for _, _, city in CITIES]
+    assert page_answers()["cities"] == expected

@@ -105,3 +105,21 @@ def test_the_held_out_figure_lies_inside_its_interval(trained: train.Trained) ->
     held_out = trained.scores["held_out"]
     low, high = held_out["median_abs_pct_error_95ci"]
     assert low < held_out["median_abs_pct_error"] < high
+
+
+def test_the_scope_index_lists_each_trained_model_by_name(tmp_path: Path) -> None:
+    for scope_id, name in [("pune", "Pune"), ("bengaluru", "Bengaluru")]:
+        (tmp_path / scope_id).mkdir()
+        body = {"scope": {"id": scope_id, "name": name, "currency": "INR"}}
+        (tmp_path / scope_id / "model.json").write_text(json.dumps(body), encoding="utf-8")
+    assert train.scope_index(tmp_path) == [
+        {"id": "bengaluru", "name": "Bengaluru"},
+        {"id": "pune", "name": "Pune"},
+    ]
+
+
+def test_the_committed_scope_index_matches_the_models() -> None:
+    models = train.ROOT / "model"
+    text = (models / "scopes.js").read_text(encoding="utf-8")
+    listed = json.loads(text.removeprefix(f"{train.SCOPES_GLOBAL} = ").removesuffix(";\n"))
+    assert listed == train.scope_index(models)
