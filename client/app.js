@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
-// Estimates in the browser from the model's weights (model/model.js, written with
-// model/model.json by src/homevalue/train.py). The checks follow src/homevalue/model.py
+// Estimates in the browser from the model's weights (model/<scope>/model.js, written with
+// model.json by src/homevalue/train.py). The checks follow src/homevalue/model.py
 // and read the same bounds; the page offers 1 to 5 bedrooms and opens on the location
 // with the most listings. Text is set with
 // textContent only.
 "use strict";
 
 const CHOICES = 5;
-const MAX_OPTIONS = 8;
 const ANNOUNCE_DELAY_MS = 500;
 const RUPEE = "\u20B9";
 const DASH = "\u2013";
@@ -37,10 +36,15 @@ function loadModel(raw) {
     const offsets = new Map(Object.entries(raw.locations).filter(([, v]) => isNumber(v)));
     const names = [...offsets.keys()].filter((n) => n !== OTHER).sort((a, c) => a.localeCompare(c));
     if (!names.includes(raw.default_location) || largest.size === 0) return null;
+    // The page formats rupees in lakh and crore, and areas in sq ft; another scope's units
+    // need their own formatting before this page can show it.
+    const scope = raw.scope;
+    if (scope?.currency !== "INR" || scope?.price_unit !== "lakh" || scope?.area_unit !== "sq ft"
+        || typeof scope?.name !== "string") return null;
     return {
         estimate: (sqft, bhk, bath, place) => Math.exp(raw.intercept + w.log_total_sqft * Math.log(sqft)
             + w.bath * bath + w.bhk * bhk + offsets.get(place)),
-        names, within, tested, defaultLocation: raw.default_location,
+        names, within, tested, defaultLocation: raw.default_location, scopeName: scope.name,
         minPerBhk: b.min_sqft_per_bhk, largest, extraBath: b.max_extra_bath,
     };
 }
@@ -105,9 +109,11 @@ function main() {
     const touched = { sqft: false, location: false };
     const location = byId("location");
     const list = byId("location-list");
+    const toggle = byId("location-toggle");
     let announceTimer = 0;
     let active = -1;
     let shown = [];
+    let chosenLocation = "";
 
     function addSegments(name, start, counts) {
         for (const i of counts) {
@@ -181,28 +187,36 @@ function main() {
             `About ${RUPEE}${rate} per sq ft`);
     }
 
-    // ---- location search: the WAI-ARIA combobox pattern, so the list follows the theme
+    // ---- location: an editable WAI-ARIA combobox with list autocomplete and an open button
+    // (APG combobox pattern). Typing filters; a click, the button or Down shows the list;
+    // only a listed name is accepted. A custom list, not a datalist, so it follows the theme.
     function setOpen(open) {
         list.hidden = !open;
         location.setAttribute("aria-expanded", String(open));
+        toggle.setAttribute("aria-expanded", String(open));
         if (!open) { active = -1; location.removeAttribute("aria-activedescendant"); }
     }
 
+    // Every name when the field is empty or already holds one; otherwise those that start
+    // with the text, then those that contain it.
     function matches(query) {
         const q = key(query);
-        if (!q) return [];
+        if (!q || byKey.has(q)) return model.names;
         const starts = model.names.filter((n) => key(n).startsWith(q));
         const within = model.names.filter((n) => !key(n).startsWith(q) && key(n).includes(q));
-        return [...starts, ...within].slice(0, MAX_OPTIONS);
+        return [...starts, ...within];
     }
 
     function option(name, index, q) {
         const item = Object.assign(document.createElement("li"), { id: `location-option-${index}` });
         item.setAttribute("role", "option");
-        item.setAttribute("aria-selected", String(index === active));
-        const at = key(name).indexOf(q);
-        const mark = Object.assign(document.createElement("mark"), { textContent: name.slice(at, at + q.length) });
-        item.append(name.slice(0, at), mark, name.slice(at + q.length));
+        item.setAttribute("aria-selected", "false");
+        const at = q ? key(name).indexOf(q) : -1;
+        if (at < 0) item.append(name);
+        else {
+            const mark = Object.assign(document.createElement("mark"), { textContent: name.slice(at, at + q.length) });
+            item.append(name.slice(0, at), mark, name.slice(at + q.length));
+        }
         item.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus in the input
         item.addEventListener("click", () => pick(name));
         return item;
@@ -217,42 +231,72 @@ function main() {
     }
 
     function render() {
-        shown = matches(location.value);
-        if (!location.value.trim()) return setOpen(false);
         const q = key(location.value);
+        shown = matches(location.value);
+        const filtering = q !== "" && !byKey.has(q);
         list.replaceChildren(...(shown.length > 0
-            ? shown.map((name, i) => option(name, i, q))
+            ? shown.map((name, i) => option(name, i, filtering ? q : ""))
             : [noMatch()]));
-        if (active >= 0) location.setAttribute("aria-activedescendant", `location-option-${active}`);
-        return setOpen(true);
+        setOpen(true);
+    }
+
+    function highlight(index) {
+        list.querySelector('[aria-selected="true"]')?.setAttribute("aria-selected", "false");
+        active = index;
+        const item = byId(`location-option-${index}`);
+        if (!item) return;
+        item.setAttribute("aria-selected", "true");
+        location.setAttribute("aria-activedescendant", item.id);
+        item.scrollIntoView({ block: "nearest" });
+    }
+
+    function openList() {
+        render();
+        highlight(shown.indexOf(byKey.get(key(location.value))));
     }
 
     function pick(name) {
         location.value = name;
+        chosenLocation = name;
         touched.location = true;
         setOpen(false);
         update();
     }
 
-    location.addEventListener("input", () => { active = -1; render(); update(); });
-    location.addEventListener("keydown", (e) => {
+    function onKey(e) {
+        const open = !list.hidden;
+        if (e.key === "ArrowDown" && (e.altKey || !open)) { e.preventDefault(); openList(); return; }
         if ((e.key === "ArrowDown" || e.key === "ArrowUp") && shown.length > 0) {
             e.preventDefault();
-            active = (active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length;
-            render();
-            byId(`location-option-${active}`)?.scrollIntoView({ block: "nearest" });
-        } else if (e.key === "Enter" && !list.hidden && shown.length > 0) {
+            highlight((active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length);
+        } else if (e.key === "Enter" && open && shown.length > 0) {
             e.preventDefault();
             pick(shown[Math.max(active, 0)]);
-        } else if (e.key === "Escape" && !list.hidden) {
+        } else if (e.key === "Escape" && open) {
             e.preventDefault();
+            location.value = chosenLocation; // back to the last name chosen
             setOpen(false);
+            update();
         }
+    }
+
+    location.addEventListener("input", () => { render(); update(); });
+    location.addEventListener("keydown", onKey);
+    location.addEventListener("focus", () => location.select()); // typing replaces the name
+    location.addEventListener("click", () => {
+        if (!list.hidden) return;
+        openList();
+        location.select(); // a mouse click can undo the selection made on focus
+    });
+    toggle.addEventListener("mousedown", (e) => e.preventDefault()); // keep focus in the input
+    toggle.addEventListener("click", () => {
+        if (list.hidden) openList(); else setOpen(false);
+        location.focus();
     });
     location.addEventListener("blur", () => {
         setOpen(false);
         const exact = byKey.get(key(location.value));
-        if (exact) location.value = exact;
+        if (exact) { location.value = exact; chosenLocation = exact; }
         touched.location = location.value.trim() !== "";
         update();
     });
@@ -271,6 +315,8 @@ function main() {
     byId("form").addEventListener("submit", (e) => e.preventDefault());
     location.placeholder = `Search ${model.names.length} locations`;
     location.value = model.defaultLocation;
+    chosenLocation = model.defaultLocation;
+    byId("scope-name").textContent = model.scopeName;
     byId("accuracy").textContent = `Tested on ${model.tested.toLocaleString("en-IN")} listings it had `
         + `not seen, half of its estimates were within ${Math.round(model.within * 100)}% of the `
         + "asking price. The typical range is that band; the other half fall outside it.";

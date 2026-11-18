@@ -1,60 +1,29 @@
 /* SPDX-License-Identifier: MIT */
-/* Royal palette, each color with one meaning. Indigo marks what can be acted on; gold
-   marks the result; red marks errors and nothing else. In light the price is set in ink
-   under a gold rule, since gold text on white reads weak; in dark the price itself is gold.
-   Every text pair meets WCAG 2.2 AA in both themes (the lowest is 5.9:1). */
+/* Royal palette. Each color has one meaning, kept in both themes: royal marks what can be
+   acted on, gold marks the result, red marks errors and nothing else; the neutrals carry
+   a trace of royal. Between themes only lightness changes, with chroma trimmed in dark.
+   Each token is a light/dark pair (light-dark(), in every browser since 2024); text pairs
+   meet WCAG 2.2 AA at 5.2:1 or more, and controls their 3:1, in both themes. */
 :root {
-    --bg: #f7f6f2;
-    --surface: #ffffff;
-    --ink: #1a1f3d;
-    --muted: #575d7e;
-    --line: #e4e1d8;
-    --field: #8a8fa8;
-    --royal: #253080;
-    --royal-soft: #eceefa;
+    color-scheme: light dark;
+    --bg: light-dark(#f5f7fb, #0c0f1a);
+    --surface: light-dark(#ffffff, #151927);
+    --raised: light-dark(#ffffff, #1c2130);         /* the location list, above the panel */
+    --ink: light-dark(#192039, #e5e8f0);
+    --muted: light-dark(#555d75, #a7adc2);
+    --line: light-dark(#dee1ea, #2b3040);           /* decorative only, under 3:1 */
+    --field: light-dark(#7e859c, #69718a);          /* input borders, 3:1 or more */
+    --royal: light-dark(#2d399c, #96acfe);          /* royal as text, links, focus */
+    --royal-fill: light-dark(#2d399c, #5366ce);     /* royal as a fill under --on-royal */
+    --royal-soft: light-dark(#e8eeff, #1f2646);
     --on-royal: #ffffff;
-    --gold: #7a5a0a;
-    --price: var(--ink);
-    --error: #b42318;
-    --shadow: 0 1px 2px rgb(26 31 61 / 5%), 0 10px 30px rgb(26 31 61 / 6%);
-    color-scheme: light;
+    --gold: light-dark(#815c0a, #e6b55d);
+    --error: light-dark(#ba2c25, #f47c6e);
+    --shade: light-dark(rgb(25 32 57 / 6%), rgb(0 0 0 / 35%));
+    --shadow: 0 1px 2px var(--shade), 0 10px 30px var(--shade);
 }
-
-:root[data-theme="dark"] {
-    --bg: #0c1024;
-    --surface: #141a37;
-    --ink: #e2e4f0;
-    --muted: #a6abca;
-    --line: #252c52;
-    --field: #5d6593;
-    --royal: #a9b4f5;
-    --royal-soft: #1f2752;
-    --on-royal: #0c1024;
-    --gold: #e6c574;
-    --price: var(--gold);
-    --error: #ff8a80;
-    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 30%);
-    color-scheme: dark;
-}
-
-@media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-        --bg: #0c1024;
-        --surface: #141a37;
-        --ink: #e2e4f0;
-        --muted: #a6abca;
-        --line: #252c52;
-        --field: #5d6593;
-        --royal: #a9b4f5;
-        --royal-soft: #1f2752;
-        --on-royal: #0c1024;
-        --gold: #e6c574;
-        --price: var(--gold);
-        --error: #ff8a80;
-        --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 10px 30px rgb(0 0 0 / 30%);
-        color-scheme: dark;
-    }
-}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
 
 /* Set for one frame while the theme changes, so every surface switches together. */
 .no-transitions * { transition: none !important; }
@@ -189,12 +158,41 @@ input:-webkit-autofill {
     transition: background-color 0.15s, color 0.15s;
 }
 .segments label:hover { background: var(--royal-soft); box-shadow: inset 0 0 0 1px var(--royal); }
-.segments input:checked + label { background: var(--royal); color: var(--on-royal); font-weight: 600; }
+.segments input:checked + label { background: var(--royal-fill); color: var(--on-royal); font-weight: 600; }
 .segments input:focus-visible + label { outline: 2px solid var(--royal); outline-offset: 2px; }
 .segments input:disabled + label { opacity: 0.35; cursor: not-allowed; background: none; }
 
 /* Location search: an ARIA combobox, so the list follows the theme (a datalist cannot). */
 .combo-box { position: relative; }
+.combo-box input { padding-right: 44px; }
+.combo-toggle {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+}
+.combo-toggle:hover { color: var(--royal); background: var(--royal-soft); }
+.combo-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.15s;
+}
+.combo-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
 [role="listbox"] {
     position: absolute;
     top: calc(100% + 4px);
@@ -206,7 +204,7 @@ input:-webkit-autofill {
     padding: 4px;
     overflow-y: auto;
     list-style: none;
-    background: var(--surface);
+    background: var(--raised);
     border: 1px solid var(--line);
     border-radius: 10px;
     box-shadow: var(--shadow);
@@ -236,7 +234,7 @@ input:-webkit-autofill {
     font-size: clamp(2.3rem, 6vw, 3.1rem);
     font-weight: 600;
     line-height: 1.1;
-    color: var(--price);
+    color: var(--gold);
     font-variant-numeric: tabular-nums;
 }
 .price.waiting { color: var(--muted); font-weight: 400; }

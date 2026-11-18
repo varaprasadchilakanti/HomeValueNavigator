@@ -5,14 +5,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="color-scheme" content="light dark">
-    <meta name="theme-color" content="#f7f6f2" media="(prefers-color-scheme: light)">
-    <meta name="theme-color" content="#0c1024" media="(prefers-color-scheme: dark)">
-    <meta name="description" content="Estimate the asking price of a Bengaluru home from its area, bedrooms, bathrooms and location.">
+    <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)">
+    <meta name="theme-color" content="#0c0f1a" media="(prefers-color-scheme: dark)">
+    <meta name="description" content="Estimate a home's asking price from its area, bedrooms, bathrooms and location.">
     <title>Home Value Navigator</title>
     <meta name="referrer" content="no-referrer">
     <meta property="og:type" content="website">
     <meta property="og:title" content="Home Value Navigator">
-    <meta property="og:description" content="Estimate the asking price of a Bengaluru home from its area, bedrooms, bathrooms and location.">
+    <meta property="og:description" content="Estimate a home's asking price from its area, bedrooms, bathrooms and location.">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <script src="theme.js"></script>
     <link rel="stylesheet" href="app.css">
@@ -42,7 +42,7 @@
 
 <main class="layout">
     <section class="intro">
-        <h1>Estimate a home's asking price in Bengaluru</h1>
+        <h1>Estimate a home's asking price in <span id="scope-name">Bengaluru</span></h1>
         <p>From a linear model trained on past listings. A learning project, not a valuation.</p>
     </section>
 
@@ -71,6 +71,10 @@
                        placeholder="Search locations" aria-autocomplete="list"
                        aria-expanded="false" aria-controls="location-list"
                        aria-describedby="location-error">
+                <button type="button" id="location-toggle" class="combo-toggle" tabindex="-1"
+                        aria-label="Show locations" aria-controls="location-list" aria-expanded="false">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+                </button>
                 <ul id="location-list" role="listbox" aria-label="Locations" hidden></ul>
             </div>
             <p class="field-error" id="location-error" hidden></p>
@@ -96,7 +100,7 @@
 </footer>
 
 <noscript><p class="foot">The estimate is computed with JavaScript; please enable it.</p></noscript>
-<script src="../model/model.js"></script>
+<script src="../model/bengaluru/model.js"></script>
 <script src="app.js"></script>
 </body>
 </html>
