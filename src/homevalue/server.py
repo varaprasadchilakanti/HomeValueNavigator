@@ -3,12 +3,14 @@
 
     GET  /api/locations  -> 200 {"locations": [...]}
     POST /api/predict    {"location": "Whitefield", "total_sqft": 1200, "bhk": 2, "bath": 2}
-                         -> 200 {"estimated_price": 85.4, "likely_low": 72.1,
-                                 "likely_high": 98.7, "unit": "lakh INR"}
+                         -> 200 {"location": "Whitefield", "estimated_price": 61.83,
+                                 "likely_low": 52.09, "likely_high": 71.57, "unit": "lakh INR"}
 
-Every error is an RFC 9457 problem document (application/problem+json): 400 for a body
-that is not JSON, 415 for another content type, 422 for a request the model cannot
-answer, with "field" naming the input at fault.
+The response names the location it matched, so a caller sees what was priced. Every
+error is an RFC 9457 problem document (application/problem+json): 400 for a body that
+is not a JSON object, 413 for one over 1 KiB, 415 for another content type, 422 for a
+request the model cannot answer, with "field" naming the input at fault, and 500, logged,
+for a fault of the server's own.
 
 Configuration comes from the environment:
     HOMEVALUE_MODEL           path to model.json (default: the repository's model/model.json)
@@ -57,6 +59,7 @@ def create_app(model_path: Path | None = None, allowed_origin: str | None = None
             return problem(422, str(refused), field=refused.field)
         spread = price * model.median_error
         return jsonify(
+            location=model.location_name(body.get("location")),
             estimated_price=price,
             likely_low=round(price - spread, 2),
             likely_high=round(price + spread, 2),
@@ -66,6 +69,11 @@ def create_app(model_path: Path | None = None, allowed_origin: str | None = None
     @app.errorhandler(HTTPException)
     def http_error(error: HTTPException) -> Response:
         return problem(error.code or 500, error.description or "")
+
+    @app.errorhandler(Exception)
+    def server_fault(error: Exception) -> Response:
+        app.logger.exception("Unhandled error", exc_info=error)
+        return problem(500, "The server failed to answer. Try again; if it persists, report it.")
 
     @app.after_request
     def cross_origin(response: Response) -> Response:

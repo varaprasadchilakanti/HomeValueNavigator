@@ -26,6 +26,7 @@ def test_a_valid_request_gets_a_price_and_its_likely_range(client: FlaskClient) 
     response = client.post("/api/predict", json=VALID)
     assert response.status_code == 200
     assert response.get_json() == {
+        "location": "Whitefield",
         "estimated_price": 75.0,
         "likely_low": 60.0,
         "likely_high": 90.0,
@@ -100,3 +101,16 @@ def test_settings_are_read_from_the_environment(
     response = create_app().test_client().get("/api/locations")
     assert response.get_json() == {"locations": ["Hebbal", "Whitefield"]}
     assert response.headers["Access-Control-Allow-Origin"] == "https://example.org"
+
+
+def test_a_fault_of_the_server_is_a_500_problem_not_a_stack_trace(model_path: Path) -> None:
+    app = create_app(model_path, allowed_origin="")
+
+    @app.get("/fault")
+    def fault() -> str:
+        raise RuntimeError("internal detail")
+
+    response = app.test_client().get("/fault")
+    assert response.status_code == 500
+    assert response.mimetype == "application/problem+json"
+    assert "internal detail" not in response.get_data(as_text=True)

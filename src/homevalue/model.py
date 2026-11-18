@@ -88,7 +88,7 @@ class PriceModel:
 
     def predict(self, location: object, sqft: object, bhk: object, bath: object) -> float:
         """Price in lakh rupees, rounded to two places, or InvalidInputError saying why not."""
-        place = self._location(location)
+        place = self.location_name(location)
         rooms = _whole("bhk", bhk, 1, self.bounds.max_bhk)
         baths = _whole("bath", bath, 1, rooms + self.bounds.max_extra_bath)
         area = self._area(_number("total_sqft", sqft), rooms)
@@ -101,7 +101,8 @@ class PriceModel:
         )
         return round(math.exp(log_price), 2)
 
-    def _location(self, value: object) -> str:
+    def location_name(self, value: object) -> str:
+        """The listed name `value` matches, ignoring case and spacing, or InvalidInputError."""
         if not isinstance(value, str) or not value.strip():
             raise InvalidInputError("location must be one of the listed names.", "location")
         name = self._index.get(_key(value))
