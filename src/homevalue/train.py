@@ -291,7 +291,9 @@ def course_method(
 
 def read_scope(scope_id: str, root: Path = ROOT) -> dict[str, Any]:
     """The description of one scope, from data/<id>/scope.json; its id must match its folder."""
-    scope: dict[str, Any] = json.loads((root / "data" / scope_id / "scope.json").read_text())
+    scope: dict[str, Any] = json.loads(
+        (root / "data" / scope_id / "scope.json").read_text(encoding="utf-8")
+    )
     if scope["id"] != scope_id:
         raise ValueError(f"data/{scope_id}/scope.json names the scope {scope['id']!r}.")
     return scope
