@@ -70,6 +70,18 @@ def test_the_json_model_predicts_what_scikit_learn_predicts(
         assert got == pytest.approx(want, abs=0.01)
 
 
+def test_plot_area_listings_are_left_out() -> None:
+    raw = pd.read_csv(train.DATA)
+    assert (raw["area_type"] == train.PLOT_AREA).sum() > 0  # the rule has something to do
+    kept = train.clean(raw)
+    assert len(kept) < len(raw)
+    assert set(raw.loc[kept.index, "area_type"]) == {
+        "Super built-up  Area",
+        "Built-up  Area",
+        "Carpet  Area",
+    }
+
+
 def test_the_test_rows_are_not_filtered_by_price(trained: train.Trained) -> None:
     """The point of the split-first pipeline: every plausible test row is scored."""
     plausible = len(train.plausible(train.clean(pd.read_csv(train.DATA))))

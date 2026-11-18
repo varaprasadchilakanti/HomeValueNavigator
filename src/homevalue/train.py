@@ -3,8 +3,9 @@
 
     uv run python -m homevalue.train     # writes model/model.json and model/model.js
 
-The data and its cleaning come from the codebasics course. The model differs in two ways,
-both measured (README, "Model card"):
+The data and its cleaning come from the codebasics course. The model differs in three ways,
+each measured (README, "Model card"):
+- It leaves out plot-area listings, whose area is land rather than floor space.
 - It predicts log price from log area, bathrooms, bedrooms and location, so its errors
   scale with price and it never gives a negative estimate.
 - The course removes price outliers from all the data before it splits off a test set, so
@@ -40,6 +41,7 @@ BROWSER_GLOBAL = "window.HOMEVALUE_MODEL"
 #: The 2024 notebook's split and seed.
 TEST_SIZE = 0.2
 SPLIT_SEED = 10
+PLOT_AREA = "Plot  Area"  # spelled with two spaces in the data
 RARE_LOCATION = 10  # a location with this many listings or fewer becomes OTHER
 MIN_SMALLER_LISTINGS = 5  # the BHK rule applies only where the smaller size has more than this
 
@@ -56,7 +58,12 @@ def sqft_to_number(value: str) -> float | None:
 
 
 def clean(raw: pd.DataFrame) -> pd.DataFrame:
-    """The course's cleaning, in its order: columns, gaps, bedrooms, area, rare locations."""
+    """Homes measured by floor area, then the course's cleaning in its order.
+
+    Plot-area listings measure land, not floor space, so the same number means a
+    different thing; the course kept them, this model does not.
+    """
+    raw = raw[raw["area_type"] != PLOT_AREA]
     df = raw.drop(columns=["area_type", "availability", "society", "balcony"]).dropna()
     df = df.assign(bhk=df["size"].map(lambda s: int(str(s).split(" ")[0])))
     df = df.assign(total_sqft=df["total_sqft"].map(lambda s: sqft_to_number(str(s)))).dropna()
