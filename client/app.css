@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: MIT */
-/* Royal palette, each colour with one meaning. Indigo marks what can be acted on; gold
+/* Royal palette, each color with one meaning. Indigo marks what can be acted on; gold
    marks the result; red marks errors and nothing else. In light the price is set in ink
    under a gold rule, since gold text on white reads weak; in dark the price itself is gold.
    Every text pair meets WCAG 2.2 AA in both themes (the lowest is 5.9:1). */

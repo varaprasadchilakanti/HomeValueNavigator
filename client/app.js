@@ -53,7 +53,7 @@ function applyTheme(choice) {
         if (choice === "system") localStorage.removeItem("theme");
         else localStorage.setItem("theme", choice);
     } catch { /* not saved; applies to this visit */ }
-    void getComputedStyle(root).opacity; // paint the new colours before transitions return
+    void getComputedStyle(root).opacity; // paint the new colors before transitions return
     root.classList.remove("no-transitions");
 }
 

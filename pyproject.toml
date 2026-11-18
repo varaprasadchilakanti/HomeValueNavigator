@@ -33,7 +33,7 @@ requires = ["uv_build>=0.13,<0.14"]
 build-backend = "uv_build"
 
 [tool.uv]
-required-version = ">=0.13"
+required-version = ">=0.13.7,<0.14"  # pre-1.0: a minor release may break
 default-groups = ["dev"]
 
 [tool.uv.build-backend]
