@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -34,11 +35,13 @@ def trained() -> train.Trained:
 
 
 def test_the_committed_model_is_what_the_data_and_code_produce(trained: train.Trained) -> None:
-    rebuilt = flat(json.loads(json.dumps(train.export(trained, ""))))
+    digest = hashlib.sha256(train.DATA.read_bytes()).hexdigest()
+    rebuilt = flat(json.loads(json.dumps(train.export(trained, digest))))
     committed = flat(json.loads(COMMITTED.read_text(encoding="utf-8")))
+    assert committed.keys() == rebuilt.keys()
     for key, value in rebuilt.items():
-        if key.startswith(("data_sha256", "trained_with")):
-            continue
+        if key.startswith("trained_with"):
+            continue  # versions may differ between machines; the numbers may not
         same = pytest.approx(value, rel=1e-9) if isinstance(value, float) else value
         assert committed[key] == same, key
 

@@ -46,7 +46,8 @@ TEST_SIZE = 0.2
 SPLIT_SEED = 10
 FOLDS = 5
 FOLD_SEED = 0
-RESAMPLES = 1000  # bootstrap draws for the interval on the held-out figure
+RESAMPLES = 1000  # bootstrap draws for each interval
+BOOTSTRAP_SEED = 0
 LAKH = 100_000  # rupees
 #: Below this area per bedroom, the course treated a listing as a data error.
 MIN_SQFT_PER_BHK = 300
@@ -158,11 +159,32 @@ def evaluate(y: np.ndarray, predicted: np.ndarray) -> dict[str, float]:
 
 def held_out(y: np.ndarray, predicted: np.ndarray) -> dict[str, Any]:
     """`evaluate`, plus a 95% bootstrap interval on the median error, seeded so it repeats."""
-    error = np.abs(predicted - y) / y
-    draws = np.random.default_rng(0).choice(error, size=(RESAMPLES, len(error)))
-    low, high = np.percentile(np.median(draws, axis=1), [2.5, 97.5])
-    interval = [round(float(low), 4), round(float(high), 4)]
-    return {**evaluate(y, predicted), "median_abs_pct_error_95ci": interval}
+    medians = np.median(_error(y, predicted)[_draws(len(y))], axis=1)
+    return {**evaluate(y, predicted), "median_abs_pct_error_95ci": _interval(medians)}
+
+
+def lead(y: np.ndarray, ours: np.ndarray, other: np.ndarray) -> list[float]:
+    """95% interval on how far our median error is below `other`'s, on the same resampled rows.
+
+    Paired, so the rows that are hard for both cancel out. Above zero, ours is better; an
+    interval that spans zero is no measured difference.
+    """
+    rows = _draws(len(y))
+    gap = np.median(_error(y, other)[rows], axis=1) - np.median(_error(y, ours)[rows], axis=1)
+    return _interval(gap)
+
+
+def _error(y: np.ndarray, predicted: np.ndarray) -> np.ndarray:
+    return np.asarray(np.abs(predicted - y) / y)
+
+
+def _draws(n: int) -> np.ndarray:
+    return np.random.default_rng(BOOTSTRAP_SEED).integers(0, n, size=(RESAMPLES, n))
+
+
+def _interval(values: np.ndarray) -> list[float]:
+    low, high = np.percentile(values, [2.5, 97.5])
+    return [round(float(low), 4), round(float(high), 4)]
 
 
 def fit(x: pd.DataFrame, y: pd.Series) -> HuberRegressor:
@@ -194,19 +216,25 @@ class Trained:
 
 
 def train(df: pd.DataFrame) -> Trained:
-    """Split first, fit on the training rows, score on the untouched test rows."""
+    """Split first, fit on the training rows, score on the untouched test rows.
+
+    Cross-validation runs on the training rows only, so the test rows are scored once.
+    """
     df = plausible(df)
     locations = sorted(df["location"].unique())
     train_rows, test_rows = train_test_split(df, test_size=TEST_SIZE, random_state=SPLIT_SEED)
     x_train, y_train = features(train_rows, locations)
     x_test, y_test = features(test_rows, locations)
     model = fit(x_train, y_train)
+    y, ours = y_test.to_numpy(), predict(model, x_test)
+    naive = baseline(train_rows, test_rows)
+    course = course_method(train_rows, test_rows, locations)
     scores = {
-        "held_out": held_out(y_test.to_numpy(), predict(model, x_test)),
+        "held_out": held_out(y, ours),
         "rows_train": len(train_rows),
-        "baseline": evaluate(y_test.to_numpy(), baseline(train_rows, test_rows)),
-        "course_method": course_method(train_rows, test_rows, locations),
-        "cross_validated": cross_validated(df, locations),
+        "baseline": {**evaluate(y, naive), "lead_95ci": lead(y, ours, naive)},
+        "course_method": {**evaluate(y, course), "lead_95ci": lead(y, ours, course)},
+        "cross_validated": cross_validated(train_rows, locations),
     }
     return Trained(model, list(x_train.columns), train_rows, scores)
 
@@ -219,7 +247,7 @@ def baseline(train_rows: pd.DataFrame, test_rows: pd.DataFrame) -> np.ndarray:
 
 
 def cross_validated(df: pd.DataFrame, locations: list[str]) -> dict[str, float]:
-    """The same fit scored on every listing once, over five folds, so one split is not luck."""
+    """The same fit scored on each row of `df` once, over five folds, so one split is not luck."""
     predicted = np.empty(len(df))
     for train_index, test_index in KFold(FOLDS, shuffle=True, random_state=FOLD_SEED).split(df):
         x_train, y_train = features(df.iloc[train_index], locations)
@@ -230,12 +258,11 @@ def cross_validated(df: pd.DataFrame, locations: list[str]) -> dict[str, float]:
 
 def course_method(
     train_rows: pd.DataFrame, test_rows: pd.DataFrame, locations: list[str]
-) -> dict[str, float]:
-    """The course's linear model, fitted on price-filtered rows, scored on the same test rows."""
+) -> np.ndarray:
+    """The course's linear model, fitted on price-filtered rows, predicting the test rows."""
     x_train, y_train = features(remove_outliers(train_rows), locations)
-    x_test, y_test = features(test_rows, locations)
-    model = LinearRegression().fit(x_train, y_train)
-    return evaluate(y_test.to_numpy(), model.predict(x_test))
+    x_test, _ = features(test_rows, locations)
+    return np.asarray(LinearRegression().fit(x_train, y_train).predict(x_test), dtype=float)
 
 
 def export(trained: Trained, data_sha256: str) -> dict[str, Any]:

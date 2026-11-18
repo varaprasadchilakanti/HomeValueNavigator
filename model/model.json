@@ -244,21 +244,29 @@
    "within_20_pct": 0.5962,
    "r2_log": 0.7622,
    "refused": 0,
-   "rows": 2194
+   "rows": 2194,
+   "lead_95ci": [
+    -0.0096,
+    0.0018
+   ]
   },
   "course_method": {
    "median_abs_pct_error": 0.1973,
    "within_20_pct": 0.5043,
    "r2_log": 0.6389,
    "refused": 3,
-   "rows": 2194
+   "rows": 2194,
+   "lead_95ci": [
+    0.0266,
+    0.0496
+   ]
   },
   "cross_validated": {
-   "median_abs_pct_error": 0.1542,
-   "within_20_pct": 0.6086,
-   "r2_log": 0.7755,
+   "median_abs_pct_error": 0.1535,
+   "within_20_pct": 0.6082,
+   "r2_log": 0.773,
    "refused": 0,
-   "rows": 10970,
+   "rows": 8776,
    "folds": 5
   }
  },
