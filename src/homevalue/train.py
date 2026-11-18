@@ -3,15 +3,17 @@
 
     uv run python -m homevalue.train     # writes model/model.json and model/model.js
 
-The data and its cleaning come from the codebasics course. The model differs in three ways,
+The data and its cleaning come from the codebasics course. The model differs in four ways,
 each measured (README, "Model card"):
 - It leaves out plot-area listings, whose area is land rather than floor space.
 - It predicts log price from log area, bathrooms, bedrooms and location, so its errors
   scale with price and it never gives a negative estimate.
+- It fits with a Huber loss, so a few mistyped listings pull the weights less than they
+  would under least squares. The model stays linear: the page needs only the weights.
 - The course removes price outliers from all the data before it splits off a test set, so
   its score is measured on listings already filtered by their own price. Here the test set
-  gets only the rules a visitor's input also passes. The course method is scored the same
-  way, beside it, in `course_method`.
+  gets only the rules a visitor's input also passes. The course method and a naive
+  baseline are scored the same way, beside it.
 """
 
 from __future__ import annotations
@@ -28,11 +30,11 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import sklearn
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import HuberRegressor, LinearRegression
 from sklearn.metrics import r2_score
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import KFold, train_test_split
 
-from homevalue.model import MAX_EXTRA_BATH, MIN_SQFT_PER_BHK, OTHER
+from homevalue.model import OTHER
 
 ROOT = Path(__file__).resolve().parents[2]
 DATA = ROOT / "data" / "bengaluru_house_prices.csv"
@@ -41,6 +43,13 @@ BROWSER_GLOBAL = "window.HOMEVALUE_MODEL"
 #: The 2024 notebook's split and seed.
 TEST_SIZE = 0.2
 SPLIT_SEED = 10
+FOLDS = 5
+FOLD_SEED = 0
+LAKH = 100_000  # rupees
+#: Below this area per bedroom, the course treated a listing as a data error.
+MIN_SQFT_PER_BHK = 300
+#: Listings with more bathrooms than bedrooms plus this are removed.
+MAX_EXTRA_BATH = 1
 PLOT_AREA = "Plot  Area"  # spelled with two spaces in the data
 RARE_LOCATION = 10  # a location with this many listings or fewer becomes OTHER
 MIN_SMALLER_LISTINGS = 5  # the BHK rule applies only where the smaller size has more than this
@@ -68,7 +77,7 @@ def clean(raw: pd.DataFrame) -> pd.DataFrame:
     df = df.assign(bhk=df["size"].map(lambda s: int(str(s).split(" ")[0])))
     df = df.assign(total_sqft=df["total_sqft"].map(lambda s: sqft_to_number(str(s)))).dropna()
     df = df.assign(location=df["location"].str.strip())
-    df = df.assign(price_per_sqft=df["price"] * 100_000 / df["total_sqft"])
+    df = df.assign(price_per_sqft=df["price"] * LAKH / df["total_sqft"])
     counts = df["location"].value_counts()
     rare = set(counts[counts <= RARE_LOCATION].index)
     return df.assign(location=df["location"].where(~df["location"].isin(rare), OTHER))
@@ -127,43 +136,77 @@ def log_area(x: pd.DataFrame) -> pd.DataFrame:
     return x.assign(total_sqft=np.log(x["total_sqft"]))
 
 
-def evaluate(y: pd.Series, predicted: np.ndarray) -> dict[str, float]:
-    """Scores on held-out listings, stated the way the page states accuracy."""
-    shown = predicted > 0  # a non-positive estimate is refused, never shown
+def evaluate(y: np.ndarray, predicted: np.ndarray) -> dict[str, float]:
+    """Scores on held-out listings, stated the way the page states accuracy.
+
+    A non-positive estimate is refused, never shown, so it is counted and left out.
+    R^2 is on log price: on price itself a handful of very expensive homes decide it.
+    """
+    y, predicted = np.asarray(y, dtype=float), np.asarray(predicted, dtype=float)
+    shown = predicted > 0
     error = np.abs(predicted[shown] - y[shown]) / y[shown]
     return {
         "median_abs_pct_error": round(float(np.median(error)), 4),
         "within_20_pct": round(float(np.mean(error <= 0.2)), 4),
-        "r2": round(float(r2_score(y, predicted)), 4),
+        "r2_log": round(float(r2_score(np.log(y[shown]), np.log(predicted[shown]))), 4),
         "refused": int((~shown).sum()),
         "rows": len(y),
     }
+
+
+def fit(x: pd.DataFrame, y: pd.Series) -> HuberRegressor:
+    """Log price on log area, bathrooms, bedrooms and location, with a Huber loss."""
+    return HuberRegressor(max_iter=1000).fit(log_area(x), np.log(y))
+
+
+def predict(model: HuberRegressor, x: pd.DataFrame) -> np.ndarray:
+    """Prices in lakh INR for the rows of `x`."""
+    return np.asarray(np.exp(model.predict(log_area(x))), dtype=float)
 
 
 @dataclass(frozen=True)
 class Trained:
     """A fitted model, the columns it was fitted on, its training rows and its scores."""
 
-    model: LinearRegression
+    model: HuberRegressor
     columns: list[str]
     rows: pd.DataFrame
     scores: dict[str, Any]
 
 
 def train(df: pd.DataFrame) -> Trained:
-    """Split first, fit log price on the training rows, score on the untouched test rows."""
+    """Split first, fit on the training rows, score on the untouched test rows."""
     df = plausible(df)
     locations = sorted(df["location"].unique())
     train_rows, test_rows = train_test_split(df, test_size=TEST_SIZE, random_state=SPLIT_SEED)
     x_train, y_train = features(train_rows, locations)
     x_test, y_test = features(test_rows, locations)
-    model = LinearRegression().fit(log_area(x_train), np.log(y_train))
+    model = fit(x_train, y_train)
     scores = {
-        "held_out": evaluate(y_test, np.exp(model.predict(log_area(x_test)))),
+        "held_out": evaluate(y_test.to_numpy(), predict(model, x_test)),
         "rows_train": len(train_rows),
+        "baseline": evaluate(y_test.to_numpy(), baseline(train_rows, test_rows)),
         "course_method": course_method(train_rows, test_rows, locations),
+        "cross_validated": cross_validated(df, locations),
     }
     return Trained(model, list(x_train.columns), train_rows, scores)
+
+
+def baseline(train_rows: pd.DataFrame, test_rows: pd.DataFrame) -> np.ndarray:
+    """The naive estimate a model has to beat: the location's median price per sq ft, times area."""
+    rate = train_rows.groupby("location")["price_per_sqft"].median()
+    per_sqft = test_rows["location"].map(rate).fillna(train_rows["price_per_sqft"].median())
+    return np.asarray(per_sqft * test_rows["total_sqft"] / LAKH)
+
+
+def cross_validated(df: pd.DataFrame, locations: list[str]) -> dict[str, float]:
+    """The same fit scored on every listing once, over five folds, so one split is not luck."""
+    predicted = np.empty(len(df))
+    for train_index, test_index in KFold(FOLDS, shuffle=True, random_state=FOLD_SEED).split(df):
+        x_train, y_train = features(df.iloc[train_index], locations)
+        x_test, _ = features(df.iloc[test_index], locations)
+        predicted[test_index] = predict(fit(x_train, y_train), x_test)
+    return {**evaluate(df["price"].to_numpy(), predicted), "folds": FOLDS}
 
 
 def course_method(
@@ -173,7 +216,7 @@ def course_method(
     x_train, y_train = features(remove_outliers(train_rows), locations)
     x_test, y_test = features(test_rows, locations)
     model = LinearRegression().fit(x_train, y_train)
-    return evaluate(y_test, model.predict(x_test))
+    return evaluate(y_test.to_numpy(), model.predict(x_test))
 
 
 def export(trained: Trained, data_sha256: str) -> dict[str, Any]:
@@ -189,6 +232,7 @@ def export(trained: Trained, data_sha256: str) -> dict[str, Any]:
             "bhk": weights.pop("bhk"),
         },
         "locations": {OTHER: 0.0, **weights},
+        "default_location": str(rows.loc[rows["location"] != OTHER, "location"].mode()[0]),
         "unit": "lakh INR",
         "bounds": {
             "min_sqft_per_bhk": MIN_SQFT_PER_BHK,

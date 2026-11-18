@@ -6,7 +6,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 import pytest
 
@@ -64,7 +63,7 @@ def test_the_json_model_predicts_what_scikit_learn_predicts(
     sample = trained.rows[trained.rows["location"] != "other"].sample(25, random_state=1)
     locations = sorted(trained.rows["location"].unique())
     x, _ = train.features(sample, locations)
-    expected = np.exp(trained.model.predict(train.log_area(x)))
+    expected = train.predict(trained.model, x)
     for (_, row), want in zip(sample.iterrows(), expected, strict=True):
         got = model.predict(row["location"], row["total_sqft"], row["bhk"], row["bath"])
         assert got == pytest.approx(want, abs=0.01)

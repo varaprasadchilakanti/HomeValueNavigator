@@ -62,6 +62,7 @@ def test_an_unknown_location_is_refused_not_priced_as_none(model: PriceModel) ->
         pytest.param(("Hebbal", 1000, 2, 4), "bath", "whole number from 1 to 3", id="bath"),
         pytest.param(("", 1000, 2, 2), "location", "listed names", id="empty-location"),
         pytest.param((42, 1000, 2, 2), "location", "listed names", id="numeric-location"),
+        pytest.param(("Heb\nbal", 1000, 2, 2), "location", "not a listed", id="newline-inside"),
     ],
 )
 def test_hostile_input_is_refused_for_its_own_reason(
@@ -90,5 +91,17 @@ def test_a_model_file_without_its_accuracy_is_refused(
 ) -> None:
     path = tmp_path / "model.json"
     path.write_text(json.dumps(small | {"scores": {}}))
-    with pytest.raises(KeyError):
+    with pytest.raises(KeyError, match="held_out"):
         PriceModel.from_json(path)
+
+
+def test_the_bounds_are_read_from_the_model_file(tmp_path: Path, small: dict[str, object]) -> None:
+    """The limits travel with the weights, so a retrained model brings its own."""
+    bounds = {"min_sqft_per_bhk": 500, "max_sqft": 30000.0, "max_bhk": 10, "max_extra_bath": 0}
+    path = tmp_path / "model.json"
+    path.write_text(json.dumps(small | {"bounds": bounds}))
+    model = PriceModel.from_json(path)
+    with pytest.raises(InvalidInputError, match="at least 500 per bedroom"):
+        model.predict("Hebbal", 900, 2, 2)
+    with pytest.raises(InvalidInputError, match="whole number from 1 to 2"):
+        model.predict("Hebbal", 1000, 2, 3)

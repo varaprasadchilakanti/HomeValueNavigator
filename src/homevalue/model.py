@@ -18,10 +18,6 @@ from typing import Any
 
 #: The pooled bucket for rare locations: the baseline of the fit, not a place to ask about.
 OTHER = "other"
-#: Below this area per bedroom, the course treated a listing as a data error.
-MIN_SQFT_PER_BHK = 300
-#: Listings with more bathrooms than bedrooms plus this were removed in training.
-MAX_EXTRA_BATH = 1
 
 
 class InvalidInputError(ValueError):
@@ -38,10 +34,12 @@ class InvalidInputError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Bounds:
-    """The ranges the training data covered."""
+    """The ranges the training data covered, as `train.py` wrote them."""
 
+    min_sqft_per_bhk: float
     max_sqft: float
     max_bhk: int
+    max_extra_bath: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +73,12 @@ class PriceModel:
             bath=float(weights["bath"]),
             bhk=float(weights["bhk"]),
             locations={k: float(v) for k, v in data["locations"].items()},
-            bounds=Bounds(float(bounds["max_sqft"]), int(bounds["max_bhk"])),
+            bounds=Bounds(
+                min_sqft_per_bhk=float(bounds["min_sqft_per_bhk"]),
+                max_sqft=float(bounds["max_sqft"]),
+                max_bhk=int(bounds["max_bhk"]),
+                max_extra_bath=int(bounds["max_extra_bath"]),
+            ),
             median_error=float(data["scores"]["held_out"]["median_abs_pct_error"]),
         )
 
@@ -87,7 +90,7 @@ class PriceModel:
         """Price in lakh rupees, rounded to two places, or InvalidInputError saying why not."""
         place = self._location(location)
         rooms = _whole("bhk", bhk, 1, self.bounds.max_bhk)
-        baths = _whole("bath", bath, 1, rooms + MAX_EXTRA_BATH)
+        baths = _whole("bath", bath, 1, rooms + self.bounds.max_extra_bath)
         area = self._area(_number("total_sqft", sqft), rooms)
         log_price = (
             self.intercept
@@ -111,10 +114,11 @@ class PriceModel:
             raise InvalidInputError(
                 f"total_sqft must be at most {self.bounds.max_sqft:,.0f}.", "total_sqft"
             )
-        if sqft < MIN_SQFT_PER_BHK * bhk:
+        least = self.bounds.min_sqft_per_bhk
+        if sqft < least * bhk:
             raise InvalidInputError(
-                f"total_sqft must be at least {MIN_SQFT_PER_BHK} per bedroom "
-                f"({MIN_SQFT_PER_BHK * bhk} for {bhk} BHK).",
+                f"total_sqft must be at least {least:,.0f} per bedroom "
+                f"({least * bhk:,.0f} for {bhk} BHK).",
                 "total_sqft",
             )
         return sqft

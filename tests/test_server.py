@@ -44,19 +44,27 @@ def test_a_refusal_is_a_422_problem_naming_the_field(client: FlaskClient) -> Non
 
 
 @pytest.mark.parametrize(
-    ("data", "content_type", "status"),
+    ("data", "content_type", "status", "detail"),
     [
-        pytest.param(b"not json", "application/json", 400, id="not-json"),
-        pytest.param(b"[1, 2]", "application/json", 400, id="a-list"),
-        pytest.param(b"location=Hebbal", "application/x-www-form-urlencoded", 415, id="a-form"),
+        pytest.param(b"not json", "application/json", 400, "JSON object", id="not-json"),
+        pytest.param(b"[1, 2]", "application/json", 400, "JSON object", id="a-list"),
+        pytest.param(b"\xff\xfe{}", "application/json", 400, "JSON object", id="not-utf-8"),
+        pytest.param(
+            b"location=Hebbal",
+            "application/x-www-form-urlencoded",
+            415,
+            "application/json",
+            id="a-form",
+        ),
     ],
 )
 def test_a_malformed_body_gets_the_matching_status(
-    client: FlaskClient, data: bytes, content_type: str, status: int
+    client: FlaskClient, data: bytes, content_type: str, status: int, detail: str
 ) -> None:
     response = client.post("/api/predict", data=data, content_type=content_type)
     assert response.status_code == status
     assert response.mimetype == "application/problem+json"
+    assert detail in response.get_json(force=True)["detail"]
 
 
 def test_an_oversized_body_is_a_413(client: FlaskClient) -> None:
