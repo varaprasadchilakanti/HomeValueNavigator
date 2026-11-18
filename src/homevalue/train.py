@@ -46,6 +46,7 @@ TEST_SIZE = 0.2
 SPLIT_SEED = 10
 FOLDS = 5
 FOLD_SEED = 0
+RESAMPLES = 1000  # bootstrap draws for the interval on the held-out figure
 LAKH = 100_000  # rupees
 #: Below this area per bedroom, the course treated a listing as a data error.
 MIN_SQFT_PER_BHK = 300
@@ -155,6 +156,15 @@ def evaluate(y: np.ndarray, predicted: np.ndarray) -> dict[str, float]:
     }
 
 
+def held_out(y: np.ndarray, predicted: np.ndarray) -> dict[str, Any]:
+    """`evaluate`, plus a 95% bootstrap interval on the median error, seeded so it repeats."""
+    error = np.abs(predicted - y) / y
+    draws = np.random.default_rng(0).choice(error, size=(RESAMPLES, len(error)))
+    low, high = np.percentile(np.median(draws, axis=1), [2.5, 97.5])
+    interval = [round(float(low), 4), round(float(high), 4)]
+    return {**evaluate(y, predicted), "median_abs_pct_error_95ci": interval}
+
+
 def fit(x: pd.DataFrame, y: pd.Series) -> HuberRegressor:
     """Log price on log area, bathrooms, bedrooms and location, with a Huber loss.
 
@@ -192,7 +202,7 @@ def train(df: pd.DataFrame) -> Trained:
     x_test, y_test = features(test_rows, locations)
     model = fit(x_train, y_train)
     scores = {
-        "held_out": evaluate(y_test.to_numpy(), predict(model, x_test)),
+        "held_out": held_out(y_test.to_numpy(), predict(model, x_test)),
         "rows_train": len(train_rows),
         "baseline": evaluate(y_test.to_numpy(), baseline(train_rows, test_rows)),
         "course_method": course_method(train_rows, test_rows, locations),

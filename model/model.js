@@ -232,7 +232,11 @@ window.HOMEVALUE_MODEL = {
    "within_20_pct": 0.6007,
    "r2_log": 0.7791,
    "refused": 0,
-   "rows": 2194
+   "rows": 2194,
+   "median_abs_pct_error_95ci": [
+    0.1507,
+    0.1638
+   ]
   },
   "rows_train": 8776,
   "baseline": {

@@ -94,3 +94,9 @@ def test_the_page_script_carries_the_same_weights_as_the_json() -> None:
     assert script.startswith(prefix)
     assert script.endswith(";\n")
     assert json.loads(script[len(prefix) : -2]) == json.loads(COMMITTED.read_text(encoding="utf-8"))
+
+
+def test_the_held_out_figure_lies_inside_its_interval(trained: train.Trained) -> None:
+    held_out = trained.scores["held_out"]
+    low, high = held_out["median_abs_pct_error_95ci"]
+    assert low < held_out["median_abs_pct_error"] < high
