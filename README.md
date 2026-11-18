@@ -161,10 +161,11 @@ Changes since then are in [CHANGELOG.md](CHANGELOG.md). Contributions:
 
 ## Acknowledgements
 
-- The data, the cleaning rules and the project's shape come from the codebasics course by
-  Dhaval Patel.
-- The course states that the data comes from Kaggle. Its licence is not stated, and the
-  dataset is not covered by this repository's licence; see
+- The codebasics course by Dhaval Patel is the baseline: the data, its cleaning rules and
+  the project's first shape come from it. The evaluation, the model, the API and the page
+  go further, and are measured against it above.
+- The dataset is listed on Kaggle under CC0 1.0, and the 2024 notebook reproduces course
+  code; neither is covered by this repository's license. See
   [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ## License
