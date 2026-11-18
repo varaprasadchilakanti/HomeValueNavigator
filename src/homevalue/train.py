@@ -1,7 +1,12 @@
 # SPDX-License-Identifier: MIT
-"""Train the model from the CSV and write its weights.
+"""Train a scope's model from its listings and write its weights.
 
-    uv run python -m homevalue.train     # writes model/model.json and model/model.js
+    uv run python -m homevalue.train                     # the default scope, bengaluru
+    uv run python -m homevalue.train --scope <id>        # data/<id>/ -> model/<id>/
+
+A scope is one market the model is trained for: data/<id>/scope.json describes it and
+names its listings file, and the model files carry that description, so nothing in the
+code is tied to one city.
 
 The data and its cleaning come from the codebasics course. The model differs in four ways,
 each measured (README, "Model card"):
@@ -38,8 +43,7 @@ from sklearn.model_selection import KFold, train_test_split
 from homevalue.model import OTHER
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA = ROOT / "data" / "bengaluru_house_prices.csv"
-OUT = ROOT / "model" / "model.json"
+DEFAULT_SCOPE = "bengaluru"
 BROWSER_GLOBAL = "window.HOMEVALUE_MODEL"
 #: The 2024 notebook's split and seed.
 TEST_SIZE = 0.2
@@ -285,13 +289,33 @@ def course_method(
     return np.asarray(LinearRegression().fit(x_train, y_train).predict(x_test), dtype=float)
 
 
-def export(trained: Trained, data_sha256: str) -> dict[str, Any]:
-    """Everything a prediction needs, its bounds, and where it came from."""
+def read_scope(scope_id: str, root: Path = ROOT) -> dict[str, Any]:
+    """The description of one scope, from data/<id>/scope.json; its id must match its folder."""
+    scope: dict[str, Any] = json.loads((root / "data" / scope_id / "scope.json").read_text())
+    if scope["id"] != scope_id:
+        raise ValueError(f"data/{scope_id}/scope.json names the scope {scope['id']!r}.")
+    return scope
+
+
+def listings(scope: dict[str, Any], root: Path = ROOT) -> Path:
+    """The listings file a scope names."""
+    return root / "data" / str(scope["id"]) / str(scope["data"]["file"])
+
+
+def model_path(scope: dict[str, Any], root: Path = ROOT) -> Path:
+    """Where a scope's model is written: model/<id>/model.json, with model.js beside it."""
+    return root / "model" / str(scope["id"]) / "model.json"
+
+
+def export(trained: Trained, scope: dict[str, Any], data_sha256: str) -> dict[str, Any]:
+    """Everything a prediction needs, its bounds, its scope, and where it came from."""
     model, rows = trained.model, trained.rows
     weights = dict(zip(trained.columns, (float(c) for c in model.coef_), strict=True))
+    unit = f"{scope['price_unit']} {scope['currency']}"
     return {
+        "scope": scope,
         "intercept": float(model.intercept_),
-        "target": "log(price in lakh INR)",
+        "target": f"log(price in {unit})",
         "coefficients": {
             "log_total_sqft": weights.pop("total_sqft"),
             "bath": weights.pop("bath"),
@@ -299,7 +323,7 @@ def export(trained: Trained, data_sha256: str) -> dict[str, Any]:
         },
         "locations": {OTHER: 0.0, **weights},
         "default_location": str(rows.loc[rows["location"] != OTHER, "location"].mode()[0]),
-        "unit": "lakh INR",
+        "unit": unit,
         "bounds": {
             "min_sqft_per_bhk": MIN_SQFT_PER_BHK,
             "max_sqft_by_bhk": {
@@ -322,19 +346,21 @@ def export(trained: Trained, data_sha256: str) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     """Train, then write the weights as JSON and as a script the page loads."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--data", type=Path, default=DATA)
-    parser.add_argument("--out", type=Path, default=OUT)
+    parser.add_argument("--scope", default=DEFAULT_SCOPE, help="a folder name under data/")
+    parser.add_argument("--out", type=Path, help="default: model/<scope>/model.json")
     args = parser.parse_args(argv)
-    trained = train(clean(pd.read_csv(args.data)))
-    payload = export(trained, hashlib.sha256(args.data.read_bytes()).hexdigest())
+    scope = read_scope(args.scope)
+    data, out = listings(scope), args.out or model_path(scope)
+    trained = train(clean(pd.read_csv(data)))
+    payload = export(trained, scope, hashlib.sha256(data.read_bytes()).hexdigest())
     text = json.dumps(payload, indent=1)
-    args.out.parent.mkdir(parents=True, exist_ok=True)
-    args.out.write_text(text + "\n", encoding="utf-8")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text + "\n", encoding="utf-8")
     # The same weights as a script: browsers refuse to fetch a JSON file from disk.
-    args.out.with_suffix(".js").write_text(f"{BROWSER_GLOBAL} = {text};\n", encoding="utf-8")
+    out.with_suffix(".js").write_text(f"{BROWSER_GLOBAL} = {text};\n", encoding="utf-8")
     ours, course = trained.scores["held_out"], trained.scores["course_method"]
     print(
-        f"{args.out}: half of held-out estimates within {ours['median_abs_pct_error']:.1%} "
+        f"{out}: half of held-out estimates within {ours['median_abs_pct_error']:.1%} "
         f"(course method {course['median_abs_pct_error']:.1%})"
     )
     return 0

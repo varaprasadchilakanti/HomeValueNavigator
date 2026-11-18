@@ -13,7 +13,8 @@ another content type, 422 for a request the model cannot answer, with "field" na
 input at fault, and 500, logged, for a fault of the server's own.
 
 Configuration comes from the environment:
-    HOMEVALUE_MODEL  path to model.json (default: model/model.json in a checkout)
+    HOMEVALUE_MODEL  path to a scope's model.json (default: model/bengaluru/model.json
+                     in a checkout)
 """
 
 from __future__ import annotations
@@ -28,7 +29,7 @@ from werkzeug.exceptions import HTTPException
 
 from homevalue.model import InvalidInputError, PriceModel
 
-DEFAULT_MODEL = Path(__file__).resolve().parents[2] / "model" / "model.json"
+DEFAULT_MODEL = Path(__file__).resolve().parents[2] / "model" / "bengaluru" / "model.json"
 MAX_BODY_BYTES = 1024
 FIELDS = ("location", "total_sqft", "bhk", "bath")
 _MODEL = "homevalue.model"  # the key the model is kept under in app.extensions
@@ -76,7 +77,7 @@ def predict() -> Response:
         estimated_price=estimate.price,
         likely_low=estimate.low,
         likely_high=estimate.high,
-        unit="lakh INR",
+        unit=_model().unit,
     )
 
 

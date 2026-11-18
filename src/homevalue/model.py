@@ -48,7 +48,7 @@ class Bounds:
 
 @dataclass(frozen=True, slots=True)
 class Estimate:
-    """A price with its typical range, in lakh INR, and the location it was priced for."""
+    """A price with its typical range, in the model's unit, and the location it was priced for."""
 
     location: str
     price: float
@@ -69,6 +69,8 @@ class PriceModel:
     #: Median absolute percentage error on held-out listings: half of the estimates
     #: were within this fraction of the asking price.
     median_error: float
+    #: The price unit, such as "lakh INR", from the scope the model was trained for.
+    unit: str
     _index: dict[str, str] = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
@@ -93,6 +95,7 @@ class PriceModel:
                 max_extra_bath=int(bounds["max_extra_bath"]),
             ),
             median_error=float(data["scores"]["held_out"]["median_abs_pct_error"]),
+            unit=str(data["unit"]),
         )
 
     def location_names(self) -> list[str]:
@@ -107,7 +110,7 @@ class PriceModel:
         return Estimate(place, price, round(price - spread, 2), round(price + spread, 2))
 
     def predict(self, location: object, sqft: object, bhk: object, bath: object) -> float:
-        """Price in lakh rupees, rounded to two places, or InvalidInputError saying why not."""
+        """Price in the model's unit, rounded to two places, or InvalidInputError saying why not."""
         place = self.location_name(location)
         rooms = self._bedrooms(bhk)
         baths = _whole("bath", bath, 1, rooms + self.bounds.max_extra_bath)

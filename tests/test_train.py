@@ -13,7 +13,9 @@ import pytest
 from homevalue import train
 from homevalue.model import PriceModel
 
-COMMITTED = train.OUT
+SCOPE = train.read_scope(train.DEFAULT_SCOPE)
+DATA = train.listings(SCOPE)
+COMMITTED = train.model_path(SCOPE)
 
 
 @pytest.mark.parametrize(
@@ -31,12 +33,12 @@ def test_area_text_becomes_a_number_or_nothing(raw: str, expected: float | None)
 
 @pytest.fixture(scope="module")
 def trained() -> train.Trained:
-    return train.train(train.clean(pd.read_csv(train.DATA)))
+    return train.train(train.clean(pd.read_csv(DATA)))
 
 
 def test_the_committed_model_is_what_the_data_and_code_produce(trained: train.Trained) -> None:
-    digest = hashlib.sha256(train.DATA.read_bytes()).hexdigest()
-    rebuilt = flat(json.loads(json.dumps(train.export(trained, digest))))
+    digest = hashlib.sha256(DATA.read_bytes()).hexdigest()
+    rebuilt = flat(json.loads(json.dumps(train.export(trained, SCOPE, digest))))
     committed = flat(json.loads(COMMITTED.read_text(encoding="utf-8")))
     assert committed.keys() == rebuilt.keys()
     for key, value in rebuilt.items():
@@ -61,7 +63,7 @@ def test_the_json_model_predicts_what_scikit_learn_predicts(
     trained: train.Trained, tmp_path: Path
 ) -> None:
     out = tmp_path / "model.json"
-    out.write_text(json.dumps(train.export(trained, "")), encoding="utf-8")
+    out.write_text(json.dumps(train.export(trained, SCOPE, "")), encoding="utf-8")
     model = PriceModel.from_json(out)
     sample = trained.rows[trained.rows["location"] != "other"].sample(25, random_state=1)
     locations = sorted(trained.rows["location"].unique())
@@ -73,7 +75,7 @@ def test_the_json_model_predicts_what_scikit_learn_predicts(
 
 
 def test_plot_area_listings_are_left_out() -> None:
-    raw = pd.read_csv(train.DATA)
+    raw = pd.read_csv(DATA)
     assert (raw["area_type"] == train.PLOT_AREA).sum() > 0  # the rule has something to do
     kept = train.clean(raw)
     assert len(kept) < len(raw)
@@ -86,7 +88,7 @@ def test_plot_area_listings_are_left_out() -> None:
 
 def test_the_test_rows_are_not_filtered_by_price(trained: train.Trained) -> None:
     """The point of the split-first pipeline: every plausible test row is scored."""
-    plausible = len(train.plausible(train.clean(pd.read_csv(train.DATA))))
+    plausible = len(train.plausible(train.clean(pd.read_csv(DATA))))
     held_out = trained.scores["held_out"]["rows"]
     assert held_out + trained.scores["rows_train"] == plausible
 

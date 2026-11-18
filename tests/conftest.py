@@ -22,6 +22,7 @@ SMALL: dict[str, object] = {
         "max_extra_bath": 1,
     },
     "scores": {"held_out": {"median_abs_pct_error": 0.2}},
+    "unit": "lakh INR",
 }
 
 

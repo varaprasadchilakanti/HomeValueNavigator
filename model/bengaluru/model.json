@@ -1,4 +1,19 @@
 {
+ "scope": {
+  "id": "bengaluru",
+  "name": "Bengaluru",
+  "region": "Bengaluru, Karnataka, India",
+  "currency": "INR",
+  "price_unit": "lakh",
+  "area_unit": "sq ft",
+  "data": {
+   "file": "listings.csv",
+   "kind": "asking prices from property listings",
+   "source": "the codebasics course Real Estate Price Prediction, from Kaggle",
+   "license": "CC0-1.0",
+   "collected": "not recorded"
+  }
+ },
  "intercept": -5.275205057068328,
  "target": "log(price in lakh INR)",
  "coefficients": {

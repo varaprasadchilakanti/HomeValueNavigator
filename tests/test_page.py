@@ -19,6 +19,7 @@ from homevalue import train
 from homevalue.model import InvalidInputError, PriceModel
 
 HARNESS = Path(__file__).with_name("page_parity.js")
+MODEL = train.model_path(train.read_scope(train.DEFAULT_SCOPE))
 ESTIMATES = [
     ("Whitefield", 1200, 2, 2),
     ("Whitefield", 600, 2, 3),
@@ -45,13 +46,13 @@ def page_answers() -> dict[str, list[object]]:
 
 
 def test_the_page_prices_as_the_python_model_does() -> None:
-    model = PriceModel.from_json(train.OUT)
+    model = PriceModel.from_json(MODEL)
     for case, price in zip(ESTIMATES, page_answers()["estimates"], strict=True):
         assert model.predict(*case) == pytest.approx(price, abs=0.005), case
 
 
 def test_the_page_reads_an_area_as_the_python_model_does() -> None:
-    model = PriceModel.from_json(train.OUT)
+    model = PriceModel.from_json(MODEL)
     for text, read in zip(AREAS, page_answers()["areas"], strict=True):
         try:
             model.predict("Whitefield", text, 1, 1)

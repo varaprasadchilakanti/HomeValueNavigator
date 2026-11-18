@@ -8,7 +8,7 @@ const vm = require("vm");
 
 const root = path.resolve(__dirname, "..");
 const sandbox = { window: {} };
-vm.runInNewContext(fs.readFileSync(path.join(root, "model", "model.js"), "utf8"), sandbox);
+vm.runInNewContext(fs.readFileSync(path.join(root, "model", "bengaluru", "model.js"), "utf8"), sandbox);
 const page = require(path.join(root, "client", "app.js"));
 const model = page.loadModel(sandbox.window.HOMEVALUE_MODEL);
 const cases = JSON.parse(fs.readFileSync(0, "utf8"));
