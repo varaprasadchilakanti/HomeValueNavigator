@@ -1,6 +1,7 @@
 # SPDX-License-Identifier: MIT
 from __future__ import annotations
 
+import io
 from pathlib import Path
 
 import pytest
@@ -13,7 +14,7 @@ VALID = {"location": "Whitefield", "total_sqft": 1000, "bhk": 2, "bath": 2}
 
 @pytest.fixture
 def client(model_path: Path) -> FlaskClient:
-    return create_app(model_path, allowed_origin="").test_client()
+    return create_app(model_path).test_client()
 
 
 def test_locations_are_listed_without_the_pooled_bucket(client: FlaskClient) -> None:
@@ -80,31 +81,32 @@ def test_an_unknown_path_is_a_404_problem_not_an_html_page(client: FlaskClient) 
     assert response.mimetype == "application/problem+json"
 
 
-def test_no_origin_is_allowed_unless_one_is_set(model_path: Path) -> None:
-    closed = create_app(model_path, allowed_origin="").test_client()
-    assert "Access-Control-Allow-Origin" not in closed.get("/api/locations").headers
-    opened = create_app(model_path, allowed_origin="https://example.org").test_client()
-    headers = opened.get("/api/locations").headers
-    assert headers["Access-Control-Allow-Origin"] == "https://example.org"
+def test_a_body_without_a_length_is_a_411(client: FlaskClient) -> None:
+    """A chunked body has no length to check against the limit, so it is refused."""
+    response = client.post(
+        "/api/predict",
+        input_stream=io.BytesIO(b"{}"),
+        content_type="application/json",
+        headers={"Transfer-Encoding": "chunked"},
+    )
+    assert response.status_code == 411
+    assert response.mimetype == "application/problem+json"
 
 
-def test_a_wildcard_origin_is_refused_at_start_up(model_path: Path) -> None:
-    with pytest.raises(ValueError, match="not a wildcard"):
-        create_app(model_path, allowed_origin="*")
+def test_responses_forbid_content_sniffing(client: FlaskClient) -> None:
+    assert client.get("/api/locations").headers["X-Content-Type-Options"] == "nosniff"
 
 
-def test_settings_are_read_from_the_environment(
+def test_the_model_path_is_read_from_the_environment(
     model_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HOMEVALUE_MODEL", str(model_path))
-    monkeypatch.setenv("HOMEVALUE_ALLOWED_ORIGIN", "https://example.org")
     response = create_app().test_client().get("/api/locations")
     assert response.get_json() == {"locations": ["Hebbal", "Whitefield"]}
-    assert response.headers["Access-Control-Allow-Origin"] == "https://example.org"
 
 
 def test_a_fault_of_the_server_is_a_500_problem_not_a_stack_trace(model_path: Path) -> None:
-    app = create_app(model_path, allowed_origin="")
+    app = create_app(model_path)
 
     @app.get("/fault")
     def fault() -> str:

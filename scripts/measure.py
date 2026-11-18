@@ -71,7 +71,7 @@ def main() -> int:
     raw = sum(p.stat().st_size for p in PAGE)
     zipped = sum(len(gzip.compress(p.read_bytes())) for p in PAGE)
     model = PriceModel.from_json(MODEL)
-    client = create_app(MODEL, allowed_origin="").test_client()
+    client = create_app(MODEL).test_client()
     predict_us = median_microseconds(lambda: model.predict("Whitefield", 1200, 2, 2), 20_000)
     api_us = median_microseconds(lambda: client.post("/api/predict", json=QUERY), 2_000)
     seconds, memory = training()
