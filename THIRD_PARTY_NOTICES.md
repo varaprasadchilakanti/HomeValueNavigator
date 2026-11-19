@@ -21,8 +21,9 @@ the file will be removed.
 
 The cleaning rules and the project's starting shape follow the course. The training
 script, evaluation, model format, API, page and tests in this repository are its own. The
-fitted models in `model/` are derived from the dataset above and are released under this
-repository's license.
+fitted models in `model/` are derived from the dataset above; they are offered under this
+repository's license to the extent the dataset's terms allow, which they do if it is the
+CC0 1.0 dataset listed on Kaggle.
 
 codebasics, Dhaval Patel and Kaggle are named for attribution only; none of them has
 reviewed or endorses this project.

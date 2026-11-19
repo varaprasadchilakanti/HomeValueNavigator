@@ -88,7 +88,7 @@ location matches whatever its case and spacing, and the response names the one i
 Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem documents
 (`application/problem+json`):
 - `400` for a body that is not a JSON object;
-- `405` for another method, with `Allow` naming the one the path takes;
+- `405` for another method, with `Allow` listing the methods the path takes;
 - `411` for a body sent without a length;
 - `413` for a body over 1 KiB;
 - `415` for another content type;
@@ -110,7 +110,7 @@ Measured with `uv run python scripts/measure.py`, on two cores:
 
 | | |
 |---|---|
-| Page a visitor downloads | 49.2 KiB in 7 files (17.4 KiB gzipped); no third-party scripts, fonts or images. A test holds it under 20 KiB gzipped |
+| Page a visitor downloads | 49.5 KiB in 7 files (17.6 KiB gzipped); no third-party scripts, fonts or images. A test holds it under 20 KiB gzipped |
 | One prediction | 27 us median, in process |
 | One API request | 1.9 ms median, Flask test client, no network |
 | Training, with all the scores | 27 s, peak 211 MiB |
@@ -132,8 +132,8 @@ Measured with `uv run python scripts/measure.py`, on two cores:
 A city is a folder, not a code change. Put its listings in `data/<scope>/listings.csv`, in
 the columns the Bengaluru file has, beside a `scope.json` like `data/bengaluru/scope.json`;
 then run `uv run python -m homevalue.train --scope <scope>` and commit `model/<scope>/` and
-`model/scopes.js`. The page lists the new city's locations under its name, and
-`tests/test_scope.py` proves this with a made-up town. The page formats prices in lakh
+`model/scopes.js`. The page lists the new city's locations under its name
+(`tests/test_page.py`), and `tests/test_scope.py` trains and serves a made-up town. The page formats prices in lakh
 rupees and areas in sq ft, and refuses a model in other units. The API serves one city,
 chosen by `HOMEVALUE_MODEL`.
 
@@ -159,7 +159,8 @@ commands are in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The test
   JavaScript, run under Node, prices and reads input as the Python model does;
 - check that no test listing was filtered by price, and that serving imports none of the
   training stack;
-- check that the paths, figures and version the documents and pages state are true, that
+- check that the paths and version the documents state, and the figures in the pages'
+  descriptions, are true; that
   the page stays within its size budget, and that its colors meet WCAG 2.2 AA in both themes.
 
 ## History

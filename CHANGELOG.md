@@ -23,7 +23,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
   answers are kept in the address, so a reload or a link shows the same estimate.
 - waitress, to serve the API in production.
 - Tests, type checks, a 90% coverage floor, CI and `scripts/measure.py`.
-- Tests that the paths, figures and version the documents state are true, that the page
+- Tests that the paths and version the documents state, and the figures in the pages'
+  descriptions, are true; that the page
   stays under 20 KiB gzipped, and that its colors meet WCAG 2.2 AA in both themes.
 
 ### Changed

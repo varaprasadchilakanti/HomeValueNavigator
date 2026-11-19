@@ -7,10 +7,11 @@
                                  "likely_low": 52.01, "likely_high": 72.23, "unit": "lakh INR"}
 
 The response names the location it matched, so a caller sees what was priced. Every
-error is an RFC 9457 problem document (application/problem+json): 400 for a body that
-is not a JSON object, 411 for one sent without a length, 413 for one over 1 KiB, 415 for
-another content type, 422 for a request the model cannot answer, with "field" naming the
-input at fault, and 500, logged, for a fault of the server's own.
+error is an RFC 9457 problem document (application/problem+json): 400 for a body that is
+not a JSON object, 405 for another method (with Allow), 411 for one sent without a
+length, 413 for one over 1 KiB, 415 for another content type, 422 for a request the
+model cannot answer, with "field" naming the input at fault, and 500, logged, for a
+fault of the server's own.
 
 Configuration comes from the environment:
     HOMEVALUE_MODEL  path to a scope's model.json (default: model/bengaluru/model.json
