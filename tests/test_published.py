@@ -18,8 +18,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ["README.md", "CONTRIBUTING.md", "SECURITY.md", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md"]
 #: What a visitor downloads, with every model/*.js; the root index.html only redirects.
 PAGE = [ROOT / "client" / n for n in ("app.html", "app.css", "theme.js", "app.js", "favicon.svg")]
-PAGE_BUDGET_GZIP = 20 * 1024  # bytes, each file compressed alone; about 17.8 KiB on 2026-11-19
+PAGE_BUDGET_GZIP = 20 * 1024  # bytes, each file compressed alone; about 17.9 KiB on 2026-11-19
 NAMED = re.compile(r"`([\w./<>*-]+)`")
+FILE = re.compile(r"\.(py|js|json|csv|md|html|css|svg|toml|lock|yml|txt|ipynb)$")
+#: Names of files not in this repository: removed ones, and the course's own.
+ELSEWHERE = {
+    "CHANGELOG.md": {"requirements.txt"},
+    "THIRD_PARTY_NOTICES.md": {"bengaluru_house_prices.csv"},
+}
 LINK = re.compile(r"\]\((?!https?:|#)([^)#]+)")
 RELEASE = re.compile(r"^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}$", re.MULTILINE)
 SINGLE = re.compile(r"--([\w-]+): (#[0-9a-f]{6});")
@@ -30,7 +36,10 @@ CONTRAST = [
     *((fg, bg, 4.5) for fg in TEXT for bg in ("bg", "surface")),
     ("ink", "raised", 4.5),
     ("muted", "raised", 4.5),
+    ("royal", "raised", 4.5),  # a match marked in the location list
     ("royal", "royal-soft", 4.5),
+    ("ink", "royal-soft", 4.5),  # the highlighted option
+    ("muted", "royal-soft", 4.5),  # the clearing row, highlighted
     ("on-royal", "royal-fill", 4.5),
     ("field", "surface", 3.0),
 ]
@@ -45,13 +54,20 @@ def read(name: str) -> str:
     return (ROOT / name).read_text(encoding="utf-8")
 
 
-@pytest.mark.parametrize("doc", DOCS)
+def named(doc: str) -> list[str]:
+    """Backticked names that look like paths: with a folder, or a file's extension; not URLs."""
+    names = NAMED.findall(read(doc))
+    return [n for n in names if not n.startswith("/") and ("/" in n or FILE.search(n))]
+
+
+@pytest.mark.parametrize("doc", [d for d in DOCS if d != "SECURITY.md"])  # it names no file
 def test_every_path_a_document_names_exists(doc: str) -> None:
     files = tracked()
-    roots = {f.split("/")[0] for f in files}
-    for name in (n for n in NAMED.findall(read(doc)) if n.split("/")[0] in roots):
+    names = [n for n in named(doc) if n not in ELSEWHERE.get(doc, set())]
+    assert names, f"{doc} names no path, so this test would check nothing"
+    for name in names:
         pattern = re.escape(name.rstrip("/")).replace("<scope>", "[^/]+").replace(r"\*", "[^/]*")
-        assert any(re.fullmatch(f"{pattern}(/.*)?", f) for f in files), f"{doc} names {name}"
+        assert any(re.fullmatch(f"(.*/)?{pattern}(/.*)?", f) for f in files), f"{doc} names {name}"
 
 
 @pytest.mark.parametrize("doc", DOCS)
@@ -64,7 +80,11 @@ def test_the_version_is_the_changelogs_latest_release() -> None:
     version = tomllib.loads(read("pyproject.toml"))["project"]["version"]
     changelog = read("CHANGELOG.md")
     latest = RELEASE.findall(changelog)[0]
-    assert version == latest or version.endswith(".dev0"), f"{version} against {latest}"
+    released = tuple(int(n) for n in latest.split("."))
+    if version.endswith(".dev0"):  # the next release in progress, so above the latest
+        assert tuple(int(n) for n in version.removesuffix(".dev0").split(".")) > released
+    else:
+        assert version == latest, f"pyproject says {version}, the changelog {latest}"
     assert f"[{latest}]: " in changelog, "the release heading needs its link"
 
 

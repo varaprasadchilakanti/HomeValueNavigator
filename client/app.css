@@ -3,8 +3,8 @@
    acted on, gold marks the result, red marks errors and nothing else; the neutrals carry
    a trace of royal. Between themes only lightness changes, with chroma trimmed in dark.
    Each token is a light/dark pair (light-dark(), in every browser since 2024); text pairs
-   meet WCAG 2.2 AA at 5:1 or more, and controls their 3:1, in both themes; each pair is
-   checked by tests/test_published.py. */
+   meet WCAG 2.2 AA (4.5:1; 5:1 or more as chosen), and controls their 3:1, in both themes;
+   tests/test_published.py checks each pair the page uses. */
 :root {
     color-scheme: light dark;
     --bg: light-dark(#f5f7fb, #0c0f1a);
