@@ -1,0 +1,60 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}  # main proves every push
+
+jobs:
+  test:
+    if: ${{ !github.event.pull_request.draft }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          version: "0.13.7"  # the floor of required-version in pyproject.toml
+          python-version: ${{ matrix.python }}
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+      - name: Lint
+        if: matrix.python == '3.11'
+        run: |
+          uv run --locked ruff check .
+          uv run --locked ruff format --check .
+      - name: Types
+        run: uv run --locked mypy src tests scripts
+      - name: Tests, with the coverage floor
+        run: uv run --locked pytest -m "not rebuild" --cov --cov-report=term-missing
+      # Retraining takes about 30 s and can only change when what it reads changes; when the
+      # range cannot be read, it runs.
+      - name: Did the training inputs change?
+        id: inputs
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          paths=(data model src/homevalue tests/test_train.py tests/conftest.py pyproject.toml uv.lock .github/workflows/ci.yml)
+          if git diff --quiet "$BASE" HEAD -- "${paths[@]}" 2>/dev/null; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: The committed model is what the data and code produce
+        if: steps.inputs.outputs.changed == 'true'
+        run: uv run --locked pytest -m rebuild

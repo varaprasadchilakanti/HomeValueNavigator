@@ -1,0 +1,86 @@
+[project]
+name = "homevaluenavigator"
+version = "0.2.0"
+description = "Bengaluru home asking-price estimates from a log-linear model, in the browser or over HTTP."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "Vara Prasad Chilakanti" }]
+dependencies = ["flask>=3.1"]
+
+[project.urls]
+Homepage = "https://varaprasadchilakanti.github.io/HomeValueNavigator/"
+Source = "https://github.com/varaprasadchilakanti/HomeValueNavigator"
+
+[dependency-groups]
+# Training needs the data stack; serving a prediction does not.
+train = ["numpy>=2.1", "pandas>=2.2", "scikit-learn>=1.5", "scipy>=1.13"]
+# A production WSGI server; waitress runs on Linux, macOS and Windows alike.
+serve = ["waitress>=3.0"]
+dev = [
+    { include-group = "train" },
+    "mypy>=1.13",
+    "pandas-stubs>=2.2",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "ruff>=0.8",
+]
+
+[build-system]
+requires = ["uv_build>=0.13,<0.14"]
+build-backend = "uv_build"
+
+[tool.uv]
+required-version = ">=0.13.7,<0.14"  # pre-1.0: a minor release may break
+default-groups = ["dev"]
+
+[tool.uv.build-backend]
+module-name = "homevalue"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E", "W", "F", "I", "C", "B", "UP", "N", "SIM", "D", "RUF", "TD", "BLE", "ERA",
+    "S110", "S602", "S604", "S105", "S106", "S107",
+    "PLW0602", "PLW0603", "PLW1508", "G004", "LOG015",
+]
+ignore = [
+    "D203", "D213",  # pydocstyle: the Google convention below picks one of each pair
+    "TD002", "TD003",  # a TODO names its reason, not an author or an issue link
+]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["D"]  # test names say what each test checks
+
+[tool.mypy]
+strict = true
+warn_unused_ignores = true
+warn_return_any = true
+
+[[tool.mypy.overrides]]
+# scikit-learn and SciPy ship no type information; only train.py imports them.
+module = ["sklearn", "sklearn.*", "scipy", "scipy.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
+markers = ["rebuild: retrains the model from the data, about 30 s"]
+
+[tool.coverage.run]
+source = ["homevalue"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true

@@ -1,0 +1,15 @@
+{
+ "id": "bengaluru",
+ "name": "Bengaluru",
+ "region": "Bengaluru, Karnataka, India",
+ "currency": "INR",
+ "price_unit": "lakh",
+ "area_unit": "sq ft",
+ "data": {
+  "file": "listings.csv",
+  "kind": "asking prices from property listings",
+  "source": "the codebasics course Real Estate Price Prediction, which says it is from Kaggle",
+  "license": "not established: the course's copy states none; a Kaggle dataset with the same columns and row count is listed CC0-1.0, and that it is the same data is unverified",
+  "collected": "not recorded"
+ }
+}
