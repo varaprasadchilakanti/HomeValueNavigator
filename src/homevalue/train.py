@@ -4,21 +4,10 @@
     uv run python -m homevalue.train                     # the default scope, bengaluru
     uv run python -m homevalue.train --scope <id>        # data/<id>/ -> model/<id>/
 
-A scope is one market the model is trained for: data/<id>/scope.json describes it and
-names its listings file, and the model files carry that description, so nothing in the
-code is tied to one city.
-
-The data and its cleaning come from the codebasics course. The model differs in four ways;
-only the whole model is scored against the course method and a baseline:
-- It leaves out plot-area listings, whose area is land rather than floor space.
-- It predicts log price from log area, bathrooms, bedrooms and location, so its errors
-  scale with price and it never gives a negative estimate.
-- It fits with a Huber loss, so a few mistyped listings pull the weights less than they
-  would under least squares. The model stays linear: the page needs only the weights.
-- The course removes price outliers from all the data before it splits off a test set, so
-  its score is measured on listings already filtered by their own price. Here the test set
-  gets only the rules a visitor's input also passes. The course method and a naive
-  baseline are scored the same way, beside it.
+A scope is one market: data/<id>/scope.json describes it and names its listings file.
+Plot-area listings are left out; log price is fitted with a Huber loss; the test set is set
+aside before any price filter, and the course method and a baseline are scored beside it
+(README, Accuracy).
 """
 
 from __future__ import annotations

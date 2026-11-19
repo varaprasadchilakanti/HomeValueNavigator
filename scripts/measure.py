@@ -26,9 +26,9 @@ from homevalue.server import create_app
 
 ROOT = Path(__file__).resolve().parents[1]
 MODEL = ROOT / "model" / "bengaluru" / "model.json"
-CLIENT = ("app.html", "app.css", "theme.js", "app.js", "favicon.svg")
+CLIENT = ("app.css", "theme.js", "app.js", "favicon.svg")
 MODELS = [ROOT / "model" / "scopes.js", MODEL.with_suffix(".js")]
-PAGE = [ROOT / "client" / n for n in CLIENT] + MODELS
+PAGE = [ROOT / "index.html"] + [ROOT / "client" / n for n in CLIENT] + MODELS
 # The root index.html only redirects, so it is not counted.
 QUERY = {"location": "Whitefield", "total_sqft": 1200, "bhk": 2, "bath": 2}
 
