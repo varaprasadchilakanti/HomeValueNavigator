@@ -127,7 +127,7 @@ form { display: grid; gap: 22px; }
 label, legend { font-weight: 600; padding: 0; }
 .hint { font-weight: 400; font-size: var(--text-sm); color: var(--muted); margin-left: 4px; }
 
-input[type="text"] {
+input[type="text"], input[type="number"] {
     width: 100%;
     padding: 11px 14px;
     font: inherit;
@@ -136,8 +136,8 @@ input[type="text"] {
     border: 1px solid var(--field);
     border-radius: 10px;
 }
-input[type="text"]::placeholder { color: var(--muted); opacity: 1; }
-input[type="text"]:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; border-color: var(--royal); }
+input::placeholder { color: var(--muted); opacity: 1; }
+input[type="text"]:focus-visible, input[type="number"]:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; border-color: var(--royal); }
 input[aria-invalid="true"] { border-color: var(--error); }
 input:-webkit-autofill {
     -webkit-text-fill-color: var(--ink);
@@ -246,6 +246,7 @@ input:-webkit-autofill {
 }
 [role="option"] mark { background: none; color: var(--royal); font-weight: 600; }
 .empty { color: var(--muted); cursor: default; }
+.clear { color: var(--muted); }
 
 /* Result */
 .result { position: sticky; top: 20px; border-top: 3px solid var(--gold); }

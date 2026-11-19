@@ -177,6 +177,13 @@ function main(scopes) {
                 type: "radio", name, id: `${name}-${i}`, value: String(i), className: "sr-only",
             });
             const label = Object.assign(document.createElement("label"), { htmlFor: input.id, textContent: String(i) });
+            // A radio cannot be cleared by itself: a second click on the chosen count clears it.
+            input.addEventListener("click", () => {
+                if (input.dataset.was !== "true") return;
+                input.checked = false;
+                if (name === "bhk") limitChoices();
+                update();
+            });
             byId(name).append(input, label);
         }
     }
@@ -254,9 +261,11 @@ function main(scopes) {
         const model = here ? ready() : null;
         const sqft = parseArea(byId("sqft").value);
         const [bhk, bath] = [picked("bhk"), picked("bath")];
+        document.querySelectorAll(".segments input").forEach((input) => { input.dataset.was = String(input.checked); });
         const typed = location.value;
         const area = areaProblem(model, sqft, bhk);
-        setError("sqft", touched.sqft && byId("sqft").value.trim() ? area : null);
+        const sqftBox = byId("sqft");
+        setError("sqft", touched.sqft && (sqftBox.value.trim() || sqftBox.validity.badInput) ? area : null);
         setError("location", touched.location && typed.trim() && !byKey.get(key(typed))
             ? "Choose a location from the list." : null);
         remember(here, sqft, bhk, bath);
@@ -328,7 +337,7 @@ function main(scopes) {
         const options = document.createElement("ul");
         options.setAttribute("role", "group");
         options.setAttribute("aria-labelledby", head.id);
-        options.append(...shown.flatMap((p, i) => (p.scope === scope.id ? [option(p, i, q)] : [])));
+        options.append(...shown.flatMap((p, i) => (p?.scope === scope.id ? [option(p, i, q)] : [])));
         box.append(head, options);
         return box;
     }
@@ -341,12 +350,26 @@ function main(scopes) {
         return item;
     }
 
+    // Shown first, and only once a place is chosen, the way back to none; it is shown[0], null.
+    function clearOption() {
+        const item = Object.assign(document.createElement("li"), {
+            id: "location-option-0", className: "clear", textContent: "Select a location",
+        });
+        item.setAttribute("role", "option");
+        item.setAttribute("aria-selected", "false");
+        item.addEventListener("mousedown", (e) => e.preventDefault());
+        item.addEventListener("click", () => pick(null));
+        return item;
+    }
+
     function render() {
         const q = key(location.value);
-        shown = matchPlaces(places, location.value, (k) => byKey.has(k));
         const filtering = q !== "" && !byKey.has(q);
-        const cities = scopes.filter((s) => shown.some((p) => p.scope === s.id));
-        list.replaceChildren(...(shown.length > 0 ? cities.map((s) => group(s, filtering ? q : "")) : [noMatch()]));
+        const found = matchPlaces(places, location.value, (k) => byKey.has(k));
+        shown = chosen && !filtering ? [null, ...found] : found;
+        const cities = scopes.filter((s) => found.some((p) => p.scope === s.id));
+        const groups = cities.map((s) => group(s, filtering ? q : ""));
+        list.replaceChildren(...(found.length === 0 ? [noMatch()] : shown[0] === null ? [clearOption(), ...groups] : groups));
         setOpen(true);
     }
 
@@ -366,9 +389,13 @@ function main(scopes) {
     }
 
     function pick(place) {
-        touched.location = true;
         setOpen(false);
-        choose(place);
+        if (place) { touched.location = true; return choose(place); }
+        chosen = null;
+        location.value = "";
+        touched.location = false;
+        limitChoices();
+        return update();
     }
 
     function onKey(e) {
@@ -379,7 +406,7 @@ function main(scopes) {
             highlight((active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length);
         } else if (e.key === "Enter" && open && shown.length > 0) {
             e.preventDefault();
-            pick(shown[Math.max(active, 0)]);
+            pick(active >= 0 ? shown[active] : shown.find((p) => p)); // unhighlighted, the first place
         } else if (e.key === "Escape" && open) {
             e.preventDefault();
             location.value = chosen ? chosen.label : ""; // back to the last place chosen
@@ -422,14 +449,14 @@ function main(scopes) {
     });
     byId("form").addEventListener("submit", (e) => e.preventDefault());
     byId("cities").textContent = scopes.map((s) => s.name).join(", ");
-    location.placeholder = `Select a location (${places.length})`;
 
     const asked = new URLSearchParams(window.location.search);
     for (const name of ["bhk", "bath"]) {
         const input = byId(`${name}-${asked.get(name)}`);
         if (input?.name === name) input.checked = true;
     }
-    if (Number.isFinite(parseArea(asked.get("sqft") ?? ""))) byId("sqft").value = asked.get("sqft");
+    const askedArea = parseArea(asked.get("sqft") ?? "");
+    if (Number.isFinite(askedArea)) byId("sqft").value = String(askedArea);
     const place = places.find((p) => p.scope === asked.get("city") && p.name === asked.get("location"));
     if (place) return choose(place);
     limitChoices();

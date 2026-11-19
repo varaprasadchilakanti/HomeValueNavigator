@@ -76,7 +76,7 @@
 
         <div class="field">
             <label for="sqft">Area <span class="hint">sq ft, as listed</span></label>
-            <input id="sqft" type="text" inputmode="decimal" placeholder="For example 1200"
+            <input id="sqft" type="number" min="0" step="50" placeholder="For example 1200"
                    aria-describedby="sqft-error">
             <p class="field-error" id="sqft-error" hidden></p>
         </div>
