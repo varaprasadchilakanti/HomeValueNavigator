@@ -23,14 +23,14 @@ def test_locations_are_listed_without_the_pooled_bucket(client: FlaskClient) -> 
     assert response.get_json() == {"locations": ["Hebbal", "Whitefield"]}
 
 
-def test_a_valid_request_gets_a_price_and_its_likely_range(client: FlaskClient) -> None:
+def test_a_valid_request_gets_a_price_and_its_typical_range(client: FlaskClient) -> None:
     response = client.post("/api/predict", json=VALID)
     assert response.status_code == 200
     assert response.get_json() == {
         "location": "Whitefield",
         "estimated_price": 75.0,
-        "likely_low": 60.0,
-        "likely_high": 90.0,
+        "typical_low": 60.0,
+        "typical_high": 90.0,
         "unit": "lakh INR",
     }
 

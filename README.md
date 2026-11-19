@@ -1,8 +1,8 @@
 # Home Value Navigator
 
 **Bengaluru home asking-price estimates, in the browser or over HTTP.**
-The course this began from scores R^2 of about 0.85, on listings already filtered by their
-own price. Rebuilt so the test listings are untouched, the same method puts half
+The course this began from scores R^2 of about 0.85 in its five-fold cross-validation, on
+listings already filtered by their own price. Rebuilt so the test listings are untouched, the same method puts half
 of its estimates within 21.8% of the asking price; this model, within 16.3%. Give an area,
 bedrooms, bathrooms and a location; it returns an estimate in lakh rupees with the range
 about half of asking prices fall within.
@@ -81,8 +81,9 @@ without them.
 | Method | Path | Body | Returns |
 |---|---|---|---|
 | `GET` | `/api/locations` | | `{"locations": [...]}`, the 164 locations |
-| `POST` | `/api/predict` | `{"location", "total_sqft", "bhk", "bath"}` | `{"location", "estimated_price", "likely_low", "likely_high", "unit": "lakh INR"}` |
+| `POST` | `/api/predict` | `{"location", "total_sqft", "bhk", "bath"}` | `{"location", "estimated_price", "typical_low", "typical_high", "unit": "lakh INR"}` |
 
+`typical_low` and `typical_high` bound the range about half of asking prices fall within.
 Numbers are JSON numbers, or text of ASCII digits with optional thousands commas. A
 location matches whatever its case and spacing, and the response names the one it matched.
 Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem documents

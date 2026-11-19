@@ -4,7 +4,7 @@
     GET  /api/locations  -> 200 {"locations": [...]}
     POST /api/predict    {"location": "Whitefield", "total_sqft": 1200, "bhk": 2, "bath": 2}
                          -> 200 {"location": "Whitefield", "estimated_price": 62.12,
-                                 "likely_low": 52.01, "likely_high": 72.23, "unit": "lakh INR"}
+                                 "typical_low": 52.01, "typical_high": 72.23, "unit": "lakh INR"}
 
 The response names the location it matched, so a caller sees what was priced. Every
 error is an RFC 9457 problem document (application/problem+json): 400 for a body that is
@@ -76,8 +76,8 @@ def predict() -> Response:
     return jsonify(
         location=estimate.location,
         estimated_price=estimate.price,
-        likely_low=estimate.low,
-        likely_high=estimate.high,
+        typical_low=estimate.low,
+        typical_high=estimate.high,
         unit=_model().unit,
     )
 
