@@ -1,0 +1,310 @@
+/* SPDX-License-Identifier: MIT */
+/* Royal palette. Each color has one meaning, kept in both themes: royal marks what can be
+   acted on, gold marks the result, red marks errors and nothing else; the neutrals carry
+   a trace of royal. Between themes only lightness changes, with chroma trimmed in dark.
+   Each token is a light/dark pair (light-dark(), in every browser since 2024); text pairs
+   meet WCAG 2.2 AA (4.5:1; 5:1 or more as chosen), and controls their 3:1, in both themes;
+   tests/test_published.py checks each pair the page uses. */
+:root {
+    color-scheme: light dark;
+    --bg: light-dark(#f5f7fb, #0c0f1a);
+    --surface: light-dark(#ffffff, #151927);
+    --raised: light-dark(#ffffff, #1c2130);         /* the location list, above the panel */
+    --ink: light-dark(#192039, #e5e8f0);
+    --muted: light-dark(#555d75, #a7adc2);
+    --line: light-dark(#dee1ea, #2b3040);           /* decorative only, under 3:1 */
+    --field: light-dark(#7e859c, #69718a);          /* input borders, 3:1 or more */
+    --royal: light-dark(#2d399c, #96acfe);          /* royal as text, links, focus */
+    --royal-fill: light-dark(#2d399c, #5366ce);     /* royal as a fill under --on-royal */
+    --royal-soft: light-dark(#e8eeff, #1f2646);
+    --on-royal: #ffffff;
+    --gold: light-dark(#815c0a, #e6b55d);
+    --error: light-dark(#ba2c25, #f47c6e);
+    --shade: light-dark(rgb(25 32 57 / 6%), transparent); /* no shadow in dark: the surfaces' lightness does it */
+    --shadow: 0 1px 2px var(--shade), 0 10px 30px var(--shade);
+
+    /* One family, the platform's own UI face; system-ui is left out for its fallbacks on
+       Windows in Chinese and Japanese. Sizes step by 1.25 from a 16px body (major third). */
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans", Roboto, Helvetica, Arial, sans-serif;
+    --text-sm: 0.875rem;   /* hints, notes, the footer */
+    --text-md: 1rem;       /* body, labels, fields */
+    --text-lg: 1.25rem;    /* the range under the price */
+    --text-xl: 1.953rem;   /* the heading */
+    --text-2xl: 2.441rem;  /* the price */
+}
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* Set for one frame while the theme changes, so every surface switches together. */
+.no-transitions * { transition: none !important; }
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    color: var(--ink);
+    font: var(--text-md)/1.55 var(--font);
+    -webkit-font-smoothing: antialiased;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+}
+
+a { color: var(--royal); text-underline-offset: 3px; }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--royal); outline-offset: 2px; }
+
+/* Header */
+.bar, .layout, .foot { max-width: 980px; width: 100%; margin: 0 auto; padding-inline: 20px; }
+.bar { display: flex; align-items: center; justify-content: space-between; padding-top: 20px; }
+.brand { font-weight: 650; }
+
+.theme {
+    position: relative;
+    display: flex;
+    gap: 2px;
+    margin: 0;
+    padding: 3px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--surface);
+}
+.theme label {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 28px;
+    border-radius: 999px;
+    color: var(--muted);
+    cursor: pointer;
+}
+.theme svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.theme label:hover { color: var(--ink); }
+.theme input:checked + label { background: var(--royal-soft); color: var(--royal); }
+.theme input:focus-visible + label { outline: 2px solid var(--royal); outline-offset: 1px; }
+
+/* Layout */
+.layout {
+    flex: 1;
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 20px;
+    padding-block: 32px;
+    align-items: start;
+}
+.intro { grid-column: 1 / -1; }
+h1 {
+    margin: 0 0 6px;
+    font-size: clamp(1.563rem, 3.2vw, var(--text-xl));
+    font-weight: 700;
+    line-height: 1.2;
+    letter-spacing: -0.015em;
+}
+.intro p { margin: 0; color: var(--muted); }
+
+.panel {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: var(--shadow);
+}
+
+/* Form */
+form { display: grid; gap: 22px; }
+.field { display: grid; gap: 8px; border: 0; margin: 0; padding: 0; min-width: 0; }
+label, legend { font-weight: 600; padding: 0; }
+.hint { font-weight: 400; font-size: var(--text-sm); color: var(--muted); margin-left: 4px; }
+
+input[type="text"], input[type="number"] {
+    width: 100%;
+    padding: 11px 14px;
+    font: inherit;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--field);
+    border-radius: 10px;
+}
+input::placeholder { color: var(--muted); opacity: 1; }
+input[type="text"]:focus-visible, input[type="number"]:focus-visible { outline: 2px solid var(--royal); outline-offset: 1px; border-color: var(--royal); }
+input[aria-invalid="true"] { border-color: var(--error); }
+input:-webkit-autofill {
+    -webkit-text-fill-color: var(--ink);
+    box-shadow: 0 0 0 100px var(--surface) inset;
+}
+
+.field-error { margin: 0; font-size: var(--text-sm); color: var(--error); }
+
+.segments {
+    position: relative;
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+}
+.segments label {
+    text-align: center;
+    padding: 7px 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-variant-numeric: tabular-nums;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background-color 0.15s, color 0.15s;
+}
+.segments label:hover { background: var(--royal-soft); box-shadow: inset 0 0 0 1px var(--royal); }
+/* Chosen: a fill, a border and bold, so it still reads where fills are dropped (print,
+   forced colors); WCAG 1.4.1, color is never the only cue. */
+.segments input:checked + label {
+    background: var(--royal-fill);
+    border-color: var(--royal-fill);
+    color: var(--on-royal);
+    font-weight: 700;
+}
+.segments input:focus-visible + label { outline: 2px solid var(--royal); outline-offset: 2px; }
+.segments input:disabled + label { opacity: 0.35; cursor: not-allowed; background: none; box-shadow: none; }
+
+/* Location search: an ARIA combobox, so the list follows the theme (a datalist cannot). */
+.combo-box { position: relative; }
+.combo-box input { padding-right: 44px; }
+.combo-toggle {
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+}
+.combo-toggle:hover { color: var(--royal); background: var(--royal-soft); }
+.combo-toggle svg {
+    width: 18px;
+    height: 18px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    transition: transform 0.15s;
+}
+.combo-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+[role="listbox"] {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: 10;
+    max-height: 264px;
+    margin: 0;
+    padding: 4px;
+    overflow-y: auto;
+    list-style: none;
+    background: var(--raised);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+}
+[role="group"] { margin: 0; padding: 0; list-style: none; }
+.group-label {
+    position: sticky;
+    top: -4px;
+    padding: 8px 12px 4px;
+    background: var(--raised);
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+[role="option"] { padding: 9px 12px; border-radius: 6px; cursor: pointer; }
+/* The active option carries a bar in --royal too: the tint alone is under 3:1 (WCAG 1.4.11). */
+[role="option"][aria-selected="true"], [role="option"]:not(.empty):hover {
+    background: var(--royal-soft);
+    box-shadow: inset 3px 0 0 var(--royal);
+}
+[role="option"] mark { background: none; color: var(--royal); font-weight: 600; }
+.empty { color: var(--muted); cursor: default; }
+.clear { color: var(--muted); }
+
+/* Result */
+.result { position: sticky; top: 20px; border-top: 3px solid var(--gold); }
+.result-label {
+    margin: 0;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--gold);
+}
+.price {
+    margin: 6px 0 4px;
+    font-size: clamp(var(--text-xl), 5vw, var(--text-2xl));
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+    font-variant-numeric: tabular-nums;
+}
+.price.waiting { color: var(--muted); font-weight: 400; }
+.range { margin: 0; font-size: var(--text-lg); font-weight: 500; min-height: 1.55em; font-variant-numeric: tabular-nums; }
+.per-sqft { margin: 2px 0 0; font-size: var(--text-sm); color: var(--muted); min-height: 1.4em; font-variant-numeric: tabular-nums; }
+.accuracy {
+    margin: 18px 0 14px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+    font-size: var(--text-sm);
+    color: var(--muted);
+}
+.method { font-size: var(--text-sm); font-weight: 500; }
+
+/* Footer */
+.foot { padding-bottom: 28px; font-size: var(--text-sm); color: var(--muted); }
+
+@media (max-width: 760px) {
+    .layout { grid-template-columns: 1fr; padding-block: 20px; }
+    .result { position: static; }
+}
+
+/* Windows High Contrast and other forced colors drop fills and shadows: mark the chosen
+   segment and the active option with a system-colored border instead. */
+@media (forced-colors: active) {
+    .segments input:checked + label { border: 2px solid Highlight; }
+    [role="option"][aria-selected="true"] { outline: 2px solid Highlight; }
+}
+
+/* Paper: ink on white, no controls that do nothing there, the chosen segment outlined. */
+@media print {
+    :root { color-scheme: light; }
+    body { background: #fff; }
+    .theme, .combo-toggle { display: none; }
+    .panel { box-shadow: none; }
+    .result { position: static; break-inside: avoid; }
+    .segments { background: none; }
+    .segments input:checked + label { background: none; color: var(--ink); border: 2px solid var(--ink); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+}
