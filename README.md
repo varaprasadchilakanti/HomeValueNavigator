@@ -168,7 +168,8 @@ commands are in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The test
 Built in 2024 while following the codebasics course
 [Real Estate Price Prediction](https://codebasics.io/courses/data-science-project-real-estate-price-prediction):
 - a Jupyter notebook, following the course's code, cleaned the data and chose the model
-  (the course's own is in its [repository](https://github.com/codebasics/py/tree/master/DataScience/BangloreHomePrices));
+  (not kept here; the course's own is in its
+  [repository](https://github.com/codebasics/py/tree/master/DataScience/BangloreHomePrices));
 - a pickled model ran behind a Flask server;
 - a jQuery page called that server.
 

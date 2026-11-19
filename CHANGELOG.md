@@ -46,8 +46,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ### Removed
 - The pickled model, `requirements.txt`, jQuery and the background image.
-- The course notebook: it reproduces the course's code, which states no license. The
-  course's own is linked from the README.
 
 ### Security
 - The API no longer allows cross-origin requests from every origin; it sends no
@@ -58,7 +56,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [0.1.0] - 2024-12-17
 
-The course project: notebook, pickled model, Flask server, jQuery page.
+The course project: pickled model, Flask server, jQuery page. Its notebook, which reproduced
+the course's code, was taken out of the history in 2026; the course's own is linked from the
+README.
 
 [Unreleased]: https://github.com/varaprasadchilakanti/HomeValueNavigator/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/varaprasadchilakanti/HomeValueNavigator/compare/v0.1.0...v0.2.0
