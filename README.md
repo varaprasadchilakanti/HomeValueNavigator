@@ -1,8 +1,8 @@
 # Home Value Navigator
 
 **Bengaluru home asking-price estimates, in the browser or over HTTP.**
-The course this began from reports R^2 of 0.84, measured on test listings already filtered
-by their own price. Rebuilt so the test listings are untouched, the same method puts half
+The course this began from scores R^2 of about 0.85, on listings already filtered by their
+own price. Rebuilt so the test listings are untouched, the same method puts half
 of its estimates within 21.8% of the asking price; this model, within 16.3%. Give an area,
 bedrooms, bathrooms and a location; it returns an estimate in lakh rupees with the range
 about half of asking prices fall within.
@@ -18,7 +18,7 @@ It runs in your browser from the model's published weights; nothing you enter le
 
 ```bash
 uv sync                                    # Python 3.11+, uv 0.13
-uv run python -m homevalue.train           # rebuild the model from the CSV
+uv run python -m homevalue.train           # rebuild the model from data/bengaluru/
 uv run --group serve waitress-serve --port 8080 --max-request-body-size=1024 \
     --call homevalue.server:create_app
 ```
@@ -52,8 +52,8 @@ they are not a first look; the cross-validated figure, on training rows only, ag
 | | |
 |---|---|
 | **Model** | Linear in log price: log area, bathrooms, bedrooms and location, fitted with a Huber loss so a few mistyped listings pull it less. 164 locations; those with 10 or fewer training listings are pooled as the baseline |
-| **Data** | `data/bengaluru_house_prices.csv`: 13,320 listings with asking prices, from the codebasics course; 10,160 distinct listings pass the rules below |
-| **Evaluation** | 2,032 held-out listings (20%, seed 10), not filtered by price; figures above. All scores are in `scores` in `model/model.json` |
+| **Data** | `data/bengaluru/listings.csv`: 13,320 listings with asking prices, the codebasics course's copy of a dataset it says is from Kaggle ([notices](THIRD_PARTY_NOTICES.md)); 10,160 distinct listings pass the rules below |
+| **Evaluation** | 2,032 held-out listings (20%, seed 10), not filtered by price; figures above. All scores are in `scores` in `model/bengaluru/model.json` |
 | **Intended use** | Learning and demonstration: an end-to-end project from raw data to a working page and API |
 | **Not for** | Valuation, lending, pricing or any decision about a real property |
 
@@ -88,42 +88,54 @@ location matches whatever its case and spacing, and the response names the one i
 Errors are [RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem documents
 (`application/problem+json`):
 - `400` for a body that is not a JSON object;
+- `405` for another method, with `Allow` naming the one the path takes;
 - `411` for a body sent without a length;
 - `413` for a body over 1 KiB;
 - `415` for another content type;
 - `422` for a request the model cannot answer, with `field` naming the input;
 - `500`, logged, for a fault of the server's own.
 
-The model answers only within the data it learned from, with the bounds in `model/model.json`:
+The model answers only within the data it learned from, with the bounds in `model/bengaluru/model.json`:
 a bedroom count the training listings have; an area from 300 sq ft per bedroom up to the
 largest training listing with that many bedrooms (6,000 sq ft for 1 BHK, 8,840 for 2); at
 most one bathroom more than bedrooms; a listed location.
 
 | Setting | Default | Purpose |
 |---|---|---|
-| `HOMEVALUE_MODEL` | `model/model.json` in a checkout | the weights to serve; set it when the package is installed elsewhere |
+| `HOMEVALUE_MODEL` | `model/bengaluru/model.json` in a checkout | the weights to serve; set it when the package is installed elsewhere |
 
 ## What it costs to run
 
-Measured on x86-64, 2 cores, Python 3.12 (`uv run python scripts/measure.py`):
+Measured with `uv run python scripts/measure.py`, on two cores:
 
 | | |
 |---|---|
-| Page a visitor downloads | 33.2 KiB in 6 files (12.5 KiB gzipped); no third-party scripts, fonts or images |
+| Page a visitor downloads | 49.2 KiB in 7 files (17.4 KiB gzipped); no third-party scripts, fonts or images. A test holds it under 20 KiB gzipped |
 | One prediction | 27 us median, in process |
 | One API request | 1.9 ms median, Flask test client, no network |
-| Training, with all the scores | 28 s, peak 212 MiB |
+| Training, with all the scores | 27 s, peak 211 MiB |
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `src/homevalue/train.py` | cleaning, the fit and every score; writes `model/model.json` and `model/model.js` |
+| `data/<scope>/` | one city: `scope.json` (its name, units and data source) and `listings.csv` |
+| `src/homevalue/train.py` | cleaning, the fit and every score; writes `model/<scope>/model.json`, the same as `model.js` for the page, and `model/scopes.js`, the page's list of cities |
 | `src/homevalue/model.py` | prediction from the JSON weights, with no scikit-learn and no pickle |
 | `src/homevalue/server.py` | the HTTP API |
-| `client/` | the page: HTML, CSS and JavaScript reading `model/model.js` |
-| `notebooks/` | the 2024 course notebook, kept for the record |
+| `client/` | the page: HTML, CSS and JavaScript reading `model/scopes.js`, then the chosen city's `model.js` |
+| `tests/` | the checks below |
 | `scripts/measure.py` | the cost figures above |
+
+## Adding a city
+
+A city is a folder, not a code change. Put its listings in `data/<scope>/listings.csv`, in
+the columns the Bengaluru file has, beside a `scope.json` like `data/bengaluru/scope.json`;
+then run `uv run python -m homevalue.train --scope <scope>` and commit `model/<scope>/` and
+`model/scopes.js`. The page lists the new city's locations under its name, and
+`tests/test_scope.py` proves this with a made-up town. The page formats prices in lakh
+rupees and areas in sq ft, and refuses a model in other units. The API serves one city,
+chosen by `HOMEVALUE_MODEL`.
 
 ## Dependencies
 
@@ -146,13 +158,16 @@ commands are in [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The test
 - check that the JSON model predicts what scikit-learn predicts, and that the page's own
   JavaScript, run under Node, prices and reads input as the Python model does;
 - check that no test listing was filtered by price, and that serving imports none of the
-  training stack.
+  training stack;
+- check that the paths, figures and version the documents and pages state are true, that
+  the page stays within its size budget, and that its colors meet WCAG 2.2 AA in both themes.
 
 ## History
 
 Built in 2024 while following the codebasics course
 [Real Estate Price Prediction](https://codebasics.io/courses/data-science-project-real-estate-price-prediction):
-- a Jupyter notebook (kept in `notebooks/`) cleaned the data and chose the model;
+- a Jupyter notebook, following the course's code, cleaned the data and chose the model
+  (the course's own is in its [repository](https://github.com/codebasics/py/tree/master/DataScience/BangloreHomePrices));
 - a pickled model ran behind a Flask server;
 - a jQuery page called that server.
 
@@ -164,9 +179,10 @@ Changes since then are in [CHANGELOG.md](CHANGELOG.md). Contributions:
 - The codebasics course by Dhaval Patel is the baseline: the data, its cleaning rules and
   the project's first shape come from it. The evaluation, the model, the API and the page
   go further, and are measured against it above.
-- The dataset is listed on Kaggle under CC0 1.0, and the 2024 notebook reproduces course
-  code; neither is covered by this repository's license. See
-  [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- The dataset is the course's copy; the course says it is from Kaggle. It is not covered
+  by this repository's license: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+- codebasics, Dhaval Patel and Kaggle are named for attribution only; none of them has
+  reviewed or endorses this project.
 
 ## License
 

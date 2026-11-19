@@ -7,8 +7,8 @@ time is promised.
 
 | Version | Supported |
 |---|---|
-| the latest commit on `main` | yes |
-| anything older | no |
+| 0.2.x, and the latest commit on `main` | yes |
+| 0.1.0 and anything older | no |
 
 The page runs entirely in the browser and sends nothing it is given. GitHub Pages, which
 serves it, keeps its own access logs, as any web host does. The API reads one local JSON
