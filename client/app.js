@@ -412,7 +412,8 @@ function main(scopes) {
             highlight(active < 0 ? (arrow > 0 ? 0 : n - 1) : (active + arrow + n) % n);
         } else if (e.key === "Enter" && open && shown.length > 0) {
             e.preventDefault();
-            pick(active >= 0 ? shown[active] : shown.find((p) => p)); // unhighlighted, the first place
+            // Unhighlighted: the place the field names exactly, else the first one listed.
+            pick(active >= 0 ? shown[active] : byKey.get(key(location.value)) ?? shown.find(Boolean));
         } else if (e.key === "Escape" && open) {
             e.preventDefault();
             location.value = chosen ? chosen.label : ""; // back to the last place chosen
