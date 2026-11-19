@@ -21,7 +21,7 @@ def test_location_matches_whatever_the_case_and_spacing(model: PriceModel) -> No
 def test_a_stored_name_with_a_double_space_still_matches(
     tmp_path: Path, small: dict[str, object]
 ) -> None:
-    """The data has 'Sarjapur  Road' with two spaces; a caller types one."""
+    """A model file may store a name with doubled spaces; a caller types one."""
     path = tmp_path / "model.json"
     path.write_text(json.dumps(small | {"locations": {"other": 0.0, "Sarjapur  Road": 0.0}}))
     assert PriceModel.from_json(path).predict("Sarjapur Road", 1000, 2, 2) == 50.0

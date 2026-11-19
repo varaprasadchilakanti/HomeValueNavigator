@@ -9,8 +9,8 @@
   "data": {
    "file": "listings.csv",
    "kind": "asking prices from property listings",
-   "source": "the codebasics course Real Estate Price Prediction, from Kaggle",
-   "license": "CC0-1.0",
+   "source": "the codebasics course Real Estate Price Prediction, which says it is from Kaggle",
+   "license": "CC0-1.0, as a Kaggle dataset of the same columns and size is listed; the course's copy states none",
    "collected": "not recorded"
   }
  },
@@ -188,7 +188,6 @@
   "Yelahanka New Town": -0.04623672524290255,
   "Yeshwanthpur": 0.1482596118595741
  },
- "default_location": "Whitefield",
  "unit": "lakh INR",
  "bounds": {
   "min_sqft_per_bhk": 300,

@@ -219,7 +219,7 @@ def fit(x: pd.DataFrame, y: pd.Series) -> HuberRegressor:
 
 
 def predict(model: HuberRegressor, x: pd.DataFrame) -> np.ndarray:
-    """Prices in lakh INR for the rows of `x`."""
+    """Prices, in the scope's price unit, for the rows of `x`."""
     return np.asarray(np.exp(model.predict(_sparse(x))), dtype=float)
 
 
@@ -343,7 +343,6 @@ def export(trained: Trained, scope: dict[str, Any], data_sha256: str) -> dict[st
             "bhk": weights.pop("bhk"),
         },
         "locations": {OTHER: 0.0, **weights},
-        "default_location": str(rows.loc[rows["location"] != OTHER, "location"].mode()[0]),
         "unit": unit,
         "bounds": {
             "min_sqft_per_bhk": MIN_SQFT_PER_BHK,
@@ -368,7 +367,11 @@ def main(argv: list[str] | None = None) -> int:
     """Train, then write the weights as JSON and as a script the page loads."""
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--scope", default=DEFAULT_SCOPE, help="a folder name under data/")
-    parser.add_argument("--out", type=Path, help="default: model/<scope>/model.json")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help="default: model/<scope>/model.json, which also updates model/scopes.js",
+    )
     args = parser.parse_args(argv)
     scope = read_scope(args.scope)
     data, out = listings(scope), args.out or model_path(scope)
@@ -379,9 +382,13 @@ def main(argv: list[str] | None = None) -> int:
     out.write_text(text + "\n", encoding="utf-8")
     # The same weights as a script: browsers refuse to fetch a JSON file from disk.
     out.with_suffix(".js").write_text(f"{BROWSER_GLOBAL} = {text};\n", encoding="utf-8")
-    # The page's list of cities: every model beside this one, so a new scope needs no code.
-    index = json.dumps(scope_index(out.parent.parent), indent=1)
-    (out.parent.parent / "scopes.js").write_text(f"{SCOPES_GLOBAL} = {index};\n", encoding="utf-8")
+    if out.resolve() == model_path(scope).resolve():
+        # The page's list of cities, from every model beside this one: a new scope needs no code.
+        # A model written elsewhere (--out) is not one the page serves, so it leaves the list alone.
+        index = json.dumps(scope_index(out.parent.parent), indent=1)
+        (out.parent.parent / "scopes.js").write_text(
+            f"{SCOPES_GLOBAL} = {index};\n", encoding="utf-8"
+        )
     ours, course = trained.scores["held_out"], trained.scores["course_method"]
     print(
         f"{out}: half of held-out estimates within {ours['median_abs_pct_error']:.1%} "
