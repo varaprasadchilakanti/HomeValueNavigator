@@ -1,66 +1,88 @@
-## [Home Value Navigator](https://varaprasadchilakanti.github.io/HomeValueNavigator/client/app.html)
+# Home Value Navigator
 
-**Project Description**:
-Home Value Navigator is a real estate price prediction platform designed to assist real estate professionals, investors, and potential homebuyers in understanding property values in the Bengaluru area. Utilizing advanced machine learning algorithms and modern web technologies, this project aims to provide accurate and reliable price predictions based on historical data.
+Enter an area, bedrooms, bathrooms and a Bengaluru location, and the page returns an
+asking-price estimate in lakh rupees with a typical range, computed in your browser. It
+rebuilds a course project whose test listings had been filtered by price: on 2,032 listings
+the model never saw, half of its estimates fall within 16.3% of the asking price; the course
+method, scored the same way, 21.8%.
 
-## Table of Contents
+**[Open the estimator](https://varaprasadchilakanti.github.io/HomeValueNavigator/).** Nothing
+you enter leaves the page.
 
-1. [Installation](#installation)
-2. [Usage](#usage)
-3. [Features](#features)
-4. [Technologies](#technologies)
-5. [Contributing](#contributing)
-6. [License](#license)
-7. [Contact](#contact)
+[![CI](https://github.com/varaprasadchilakanti/HomeValueNavigator/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/varaprasadchilakanti/HomeValueNavigator/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-253080)](LICENSE)
 
-## Installation
+## The result
 
-To get started with the Home Value Navigator, follow these steps:
+The course drops listings whose price per sq ft is unusual for their location before it sets
+aside its test set ([its notebook](https://github.com/codebasics/py/tree/master/DataScience/BangloreHomePrices)),
+so its test listings were chosen using their own prices. A visitor's home has no price to
+filter on. Here the test set is set aside first, and rows identical in location, size, area,
+bathrooms and price are kept once, so a repeat cannot sit on both sides.
 
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/varaprasadchilakanti/HomeValueNavigator.git
-   cd HomeValueNavigator
-2. **Install dependencies**: You need Python and some external libraries to run this project. You can install them using pip:
-   ```bash
-   pip install -r requirements.txt
-3. **Setup Configuration Files**: Copy config_sample.json to config.json and update it with your configuration details:
-   ```bash
-   cp config_sample.json config.json
+| | Half of estimates within | Within 20% |
+|---|---|---|
+| **This model** | **16.3%** (95% interval 15.5 to 17.2) | 58% |
+| Course method, scored the same way | 21.8% | 47% |
+| The location's median price per sq ft, times area | 16.9% | 57% |
 
-## Usage
-### Running the Application Locally
-1. **Run the server**: This will start the web server, and the application will be accessible via http://localhost:{change_with_ Your_Port}.
-     ```bash
-     python server/server.py
-2. **Predict Home Prices**: Visit the application in your browser and input property details (e.g., number of rooms, location, size) to receive predictions.
-  
-## Features
-   1. Real-time predictions: Provides price estimates based on user inputs.
-   2. Advanced machine learning model: Trained using historical real estate data from Bengaluru.
-   3. User-friendly interface: Accessible via a web browser, allowing easy interaction.
-   4. Cross-platform compatibility: Runs on Windows, Linux, and macOS.
-## Technologies
-  * Programming Language: Python 3.x
-  * Web Framework: Flask
-  * Machine Learning: Scikit-Learn, NumPy, Pandas
-  * Database: SQLite for local storage of data
-  * Deployment: Docker, Heroku
-  * Version Control: Git
-## Contributing
-  We welcome contributions to improve this project! If you'd like to contribute:
-    Fork the repository.
-    Create a new branch (git checkout -b feature-branch).
-    Make your changes.
-    Commit your changes (git commit -am 'Add new feature').
-    Push your changes to your forked repository (git push origin feature-branch).
-    Create a pull request on GitHub.
-## License
-This project is licensed under the MIT License. See the LICENSE file for more information.
+On the same resampled rows, the model's median error is 4.4 to 6.7 points below the course
+method's (95% interval); the course method gives a price of zero or less for 3 listings,
+which are left out of its figures. Against the per-sq-ft rule the interval is -0.3 to +1.3
+points, which spans zero: **no measured difference**. What the model adds is a price that
+moves with bedrooms and bathrooms. The typical range held half (50%) of the held-out asking
+prices.
 
-## Contact
-  * **Project Maintainer**: Vara Prasad
-  * **Email**: varaprasadchilakanti@gmail.com
-  * **GitHub**: @varaprasadchilakanti
-  
-For any issues or questions, feel free to open an issue or contact the maintainer via email.
+I looked at the held-out figures while choosing the plot-area rule and the Huber loss, so
+they are not a clean first look; five-fold cross-validation on the training rows alone gives
+16.4%. Every figure is in `scores` in `model/bengaluru/model.json`.
+
+## Run it
+
+```bash
+uv sync                                  # Python 3.11+
+uv run python -m homevalue.train         # retrain; rewrites model/
+uv run pytest -m "not rebuild"           # all but the 30 s retrain; the page test needs Node
+uv run --group serve waitress-serve --listen 127.0.0.1:8080 --max-request-body-size=1024 \
+    --call homevalue.server:create_app
+```
+
+`GET /api/locations` lists the locations; `POST /api/predict` takes
+`{"location", "total_sqft", "bhk", "bath"}` and returns `estimated_price`, `typical_low` and
+`typical_high` in lakh INR. It refuses what the training listings don't cover, such as a
+1 BHK over 6,000 sq ft, with a 422 that names the field. Errors are
+[RFC 9457](https://www.rfc-editor.org/rfc/rfc9457) problem documents.
+
+## How it works
+
+A linear model of log price on log area, bathrooms, bedrooms and location (164 locations;
+those with 10 or fewer training listings are pooled), fitted with a Huber loss so a few
+mistyped listings pull it less. Training writes plain JSON weights, not a pickle, so loading
+the model runs no code. The page and the API both predict from that JSON, and a test runs the
+page's JavaScript under Node to check it prices as the Python does.
+
+To add a city, put its listings in `data/<scope>/listings.csv` beside a `scope.json`, where
+`<scope>` is the city's id; run `uv run python -m homevalue.train --scope <scope>`, then
+commit `model/<scope>/` and `model/scopes.js`. No code changes. The API serves one city: the
+`model.json` that `HOMEVALUE_MODEL` names, Bengaluru's by default.
+
+## Limits
+
+- It is a learning project; don't use it to value a real property.
+- Asking prices, not sale prices, from listings whose collection year is not recorded.
+- A location adds the same percentage to every home in it.
+- Half of the estimates miss by about 16% or more.
+
+## Data and license
+
+13,320 Bengaluru listings, the codebasics course's copy of a dataset it says is from Kaggle.
+The code and the page are [MIT](LICENSE). The data is not covered by it, and the fitted models
+only as far as the data's terms allow: see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+Begun in 2024 as an exercise in the codebasics course
+[Real Estate Price Prediction](https://codebasics.io/courses/data-science-project-real-estate-price-prediction)
+by Dhaval Patel, which gave the data, its cleaning rules and the first shape; rebuilt in 2026.
+
+The project is finished and not maintained. Forks are welcome under those terms; I don't
+merge pull requests here. Security reports:
+[SECURITY.md](SECURITY.md).
