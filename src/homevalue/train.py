@@ -1,0 +1,401 @@
+# SPDX-License-Identifier: MIT
+"""Train a scope's model from its listings and write its weights.
+
+    uv run python -m homevalue.train                     # the default scope, bengaluru
+    uv run python -m homevalue.train --scope <id>        # data/<id>/ -> model/<id>/
+
+A scope is one market the model is trained for: data/<id>/scope.json describes it and
+names its listings file, and the model files carry that description, so nothing in the
+code is tied to one city.
+
+The data and its cleaning come from the codebasics course. The model differs in four ways;
+only the whole model is scored against the course method and a baseline:
+- It leaves out plot-area listings, whose area is land rather than floor space.
+- It predicts log price from log area, bathrooms, bedrooms and location, so its errors
+  scale with price and it never gives a negative estimate.
+- It fits with a Huber loss, so a few mistyped listings pull the weights less than they
+  would under least squares. The model stays linear: the page needs only the weights.
+- The course removes price outliers from all the data before it splits off a test set, so
+  its score is measured on listings already filtered by their own price. Here the test set
+  gets only the rules a visitor's input also passes. The course method and a naive
+  baseline are scored the same way, beside it.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import platform
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import pandas as pd
+import scipy.sparse as sparse
+import sklearn
+from sklearn.linear_model import HuberRegressor, LinearRegression
+from sklearn.metrics import r2_score
+from sklearn.model_selection import KFold, train_test_split
+
+from homevalue.model import OTHER
+
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_SCOPE = "bengaluru"
+BROWSER_GLOBAL = "window.HOMEVALUE_MODEL"
+SCOPES_GLOBAL = "window.HOMEVALUE_SCOPES"
+#: The course's split and seed.
+TEST_SIZE = 0.2
+SPLIT_SEED = 10
+FOLDS = 5
+FOLD_SEED = 0
+RESAMPLES = 1000  # bootstrap draws for each interval
+BOOTSTRAP_SEED = 0
+LAKH = 100_000  # rupees
+#: Below this area per bedroom, the course treated a listing as a data error.
+MIN_SQFT_PER_BHK = 300
+#: Listings with more bathrooms than bedrooms plus this are removed.
+MAX_EXTRA_BATH = 1
+PLOT_AREA = "Plot  Area"  # spelled with two spaces in the data
+RARE_LOCATION = 10  # a location with this many listings or fewer becomes OTHER
+MIN_SMALLER_LISTINGS = 5  # the BHK rule applies only where the smaller size has more than this
+
+
+def sqft_to_number(value: str) -> float | None:
+    """'1200' -> 1200.0, '2100 - 2850' -> the midpoint, anything with a unit -> None."""
+    parts = value.split("-")
+    try:
+        if len(parts) == 2:
+            return (float(parts[0]) + float(parts[1])) / 2
+        return float(value)
+    except ValueError:
+        return None
+
+
+def clean(raw: pd.DataFrame) -> pd.DataFrame:
+    """Homes measured by floor area, then the course's cleaning in its order, once each.
+
+    Plot-area listings measure land, not floor space, so the same number means a
+    different thing; the course kept them, this model does not. Rows that repeat the same
+    location, size, area, bathrooms and price are kept once, so a listing posted twice
+    cannot sit on both sides of the split.
+    """
+    raw = raw[raw["area_type"] != PLOT_AREA]
+    df = raw.drop(columns=["area_type", "availability", "society", "balcony"]).dropna()
+    df = df.assign(bhk=df["size"].map(lambda s: int(str(s).split(" ")[0])))
+    df = df.assign(total_sqft=df["total_sqft"].map(lambda s: sqft_to_number(str(s)))).dropna()
+    df = df.assign(location=df["location"].map(lambda s: " ".join(str(s).split())))
+    df = df.assign(price_per_sqft=df["price"] * LAKH / df["total_sqft"])
+    return df.drop_duplicates()
+
+
+def pool_rare(rows: pd.DataFrame, counted: pd.DataFrame) -> pd.DataFrame:
+    """Locations with RARE_LOCATION or fewer listings in `counted` become OTHER."""
+    counts = counted["location"].value_counts()
+    common = set(counts[counts > RARE_LOCATION].index)
+    return rows.assign(location=rows["location"].where(rows["location"].isin(common), OTHER))
+
+
+def plausible(df: pd.DataFrame) -> pd.DataFrame:
+    """The rules that use no price, so a visitor's input passes them too."""
+    keep = (df["total_sqft"] / df["bhk"] >= MIN_SQFT_PER_BHK) & (
+        df["bath"] <= df["bhk"] + MAX_EXTRA_BATH
+    )
+    return df[keep].reset_index(drop=True)
+
+
+def remove_outliers(df: pd.DataFrame) -> pd.DataFrame:
+    """The course's outlier rules in its order: area per bedroom, price, BHK, bathrooms."""
+    df = df[df["total_sqft"] / df["bhk"] >= MIN_SQFT_PER_BHK]
+    df = _within_one_std(df)
+    df = _drop_cheaper_than_smaller(df)
+    return df[df["bath"] <= df["bhk"] + MAX_EXTRA_BATH]
+
+
+def _within_one_std(df: pd.DataFrame) -> pd.DataFrame:
+    """Per location, keep price per sqft within one population std of its mean."""
+    grouped = df.groupby("location")["price_per_sqft"]
+    stats = pd.DataFrame({"mean": grouped.mean(), "std": grouped.std(ddof=0)})
+    joined = df.join(stats, on="location")
+    keep = (joined["price_per_sqft"] > joined["mean"] - joined["std"]) & (
+        joined["price_per_sqft"] <= joined["mean"] + joined["std"]
+    )
+    return df[keep].reset_index(drop=True)
+
+
+def _drop_cheaper_than_smaller(df: pd.DataFrame) -> pd.DataFrame:
+    """Drop N-BHK listings priced per sqft below the mean (N-1)-BHK listing nearby.
+
+    Applies only where the location has more than five (N-1)-BHK listings.
+    """
+    stats = df.groupby(["location", "bhk"])["price_per_sqft"].agg(["mean", "count"])
+    smaller = stats.rename(index=lambda b: b + 1, level="bhk")
+    joined = df.join(smaller, on=["location", "bhk"])
+    drop = (joined["count"] > MIN_SMALLER_LISTINGS) & (joined["price_per_sqft"] < joined["mean"])
+    return df[~drop]
+
+
+def features(df: pd.DataFrame, locations: list[str]) -> tuple[pd.DataFrame, pd.Series]:
+    """Area, bathrooms, bedrooms and one-hot location over `locations`; OTHER is the baseline."""
+    place = pd.Categorical(df["location"], categories=locations)
+    dummies = pd.get_dummies(place, dtype=float).drop(columns=OTHER)
+    dummies.index = df.index
+    x = pd.concat([df[["total_sqft", "bath", "bhk"]], dummies], axis="columns")
+    return x, df["price"]
+
+
+def log_area(x: pd.DataFrame) -> pd.DataFrame:
+    """The same features with area on a log scale."""
+    return x.assign(total_sqft=np.log(x["total_sqft"]))
+
+
+def evaluate(y: np.ndarray, predicted: np.ndarray) -> dict[str, float]:
+    """Scores on held-out listings, stated the way the page states accuracy.
+
+    A non-positive estimate is refused, never shown, so it is counted and left out.
+    R^2 is on log price: on price itself a handful of very expensive homes decide it.
+    """
+    y, predicted = np.asarray(y, dtype=float), np.asarray(predicted, dtype=float)
+    shown = predicted > 0
+    error = np.abs(predicted[shown] - y[shown]) / y[shown]
+    return {
+        "median_abs_pct_error": round(float(np.median(error)), 4),
+        "within_20_pct": round(float(np.mean(error <= 0.2)), 4),
+        "r2_log": round(float(r2_score(np.log(y[shown]), np.log(predicted[shown]))), 4),
+        "refused": int((~shown).sum()),
+        "rows": len(y),
+    }
+
+
+def held_out(y: np.ndarray, predicted: np.ndarray) -> dict[str, Any]:
+    """`evaluate`, with a 95% bootstrap interval on the median error and range coverage.
+
+    Coverage is how often the typical range, the estimate plus or minus that error, holds
+    the asking price: about half, if the range means what the page says.
+    """
+    error = _error(y, predicted)
+    medians = np.median(error[_draws(len(y))], axis=1)
+    band = float(np.median(error))
+    inside = np.abs(y - predicted) <= band * predicted
+    return {
+        **evaluate(y, predicted),
+        "median_abs_pct_error_95ci": _interval(medians),
+        "range_coverage": round(float(np.mean(inside)), 4),
+    }
+
+
+def lead(y: np.ndarray, ours: np.ndarray, other: np.ndarray) -> list[float]:
+    """95% interval on how far our median error is below `other`'s, on the same resampled rows.
+
+    Paired, so the rows that are hard for both cancel out. Above zero, ours is better; an
+    interval that spans zero is no measured difference.
+    """
+    rows = _draws(len(y))
+    gap = np.median(_error(y, other)[rows], axis=1) - np.median(_error(y, ours)[rows], axis=1)
+    return _interval(gap)
+
+
+def _error(y: np.ndarray, predicted: np.ndarray) -> np.ndarray:
+    return np.asarray(np.abs(predicted - y) / y)
+
+
+def _draws(n: int) -> np.ndarray:
+    return np.random.default_rng(BOOTSTRAP_SEED).integers(0, n, size=(RESAMPLES, n))
+
+
+def _interval(values: np.ndarray) -> list[float]:
+    low, high = np.percentile(values, [2.5, 97.5])
+    return [round(float(low), 4), round(float(high), 4)]
+
+
+def fit(x: pd.DataFrame, y: pd.Series) -> HuberRegressor:
+    """Log price on log area, bathrooms, bedrooms and location, with a Huber loss.
+
+    The location columns are almost all zero, so they are passed as a sparse matrix.
+    """
+    return HuberRegressor(max_iter=1000).fit(_sparse(x), np.log(y))
+
+
+def predict(model: HuberRegressor, x: pd.DataFrame) -> np.ndarray:
+    """Prices, in the scope's price unit, for the rows of `x`."""
+    return np.asarray(np.exp(model.predict(_sparse(x))), dtype=float)
+
+
+def _sparse(x: pd.DataFrame) -> sparse.csr_matrix:
+    return sparse.csr_matrix(log_area(x).to_numpy(dtype=float))
+
+
+@dataclass(frozen=True)
+class Trained:
+    """A fitted model, the columns it was fitted on, its training rows and its scores."""
+
+    model: HuberRegressor
+    columns: list[str]
+    rows: pd.DataFrame
+    scores: dict[str, Any]
+
+
+def train(df: pd.DataFrame) -> Trained:
+    """Split first, fit on the training rows, score on the untouched test rows.
+
+    Rare locations are pooled by their count in the training rows, and cross-validation
+    runs on the training rows only, so the test rows inform nothing and are scored once.
+    """
+    train_rows, test_rows = train_test_split(
+        plausible(df), test_size=TEST_SIZE, random_state=SPLIT_SEED
+    )
+    train_rows, test_rows = pool_rare(train_rows, train_rows), pool_rare(test_rows, train_rows)
+    locations = sorted(set(train_rows["location"]) | {OTHER})
+    x_train, y_train = features(train_rows, locations)
+    x_test, y_test = features(test_rows, locations)
+    model = fit(x_train, y_train)
+    y, ours = y_test.to_numpy(), predict(model, x_test)
+    naive = baseline(train_rows, test_rows)
+    course = course_method(train_rows, test_rows, locations)
+    scores = {
+        "held_out": held_out(y, ours),
+        "rows_train": len(train_rows),
+        "baseline": {**evaluate(y, naive), "lead_95ci": lead(y, ours, naive)},
+        "course_method": {**evaluate(y, course), "lead_95ci": lead(y, ours, course)},
+        "cross_validated": cross_validated(train_rows, locations),
+    }
+    return Trained(model, list(x_train.columns), train_rows, scores)
+
+
+def baseline(train_rows: pd.DataFrame, test_rows: pd.DataFrame) -> np.ndarray:
+    """The naive estimate a model has to beat: the location's median price per sq ft, times area."""
+    rate = train_rows.groupby("location")["price_per_sqft"].median()
+    per_sqft = test_rows["location"].map(rate).fillna(train_rows["price_per_sqft"].median())
+    return np.asarray(per_sqft * test_rows["total_sqft"] / LAKH)
+
+
+def cross_validated(df: pd.DataFrame, locations: list[str]) -> dict[str, float]:
+    """The same fit scored on each row of `df` once, over five folds, so one split is not luck."""
+    predicted = np.empty(len(df))
+    for train_index, test_index in KFold(FOLDS, shuffle=True, random_state=FOLD_SEED).split(df):
+        x_train, y_train = features(df.iloc[train_index], locations)
+        x_test, _ = features(df.iloc[test_index], locations)
+        predicted[test_index] = predict(fit(x_train, y_train), x_test)
+    return {**evaluate(df["price"].to_numpy(), predicted), "folds": FOLDS}
+
+
+def course_method(
+    train_rows: pd.DataFrame, test_rows: pd.DataFrame, locations: list[str]
+) -> np.ndarray:
+    """The course's linear model, fitted on price-filtered rows, predicting the test rows."""
+    x_train, y_train = features(remove_outliers(train_rows), locations)
+    x_test, _ = features(test_rows, locations)
+    return np.asarray(LinearRegression().fit(x_train, y_train).predict(x_test), dtype=float)
+
+
+def read_scope(scope_id: str, root: Path = ROOT) -> dict[str, Any]:
+    """The description of one scope, from data/<id>/scope.json; its id must match its folder."""
+    scope: dict[str, Any] = json.loads(
+        (root / "data" / scope_id / "scope.json").read_text(encoding="utf-8")
+    )
+    if scope["id"] != scope_id:
+        raise ValueError(f"data/{scope_id}/scope.json names the scope {scope['id']!r}.")
+    return scope
+
+
+def listings(scope: dict[str, Any], root: Path = ROOT) -> Path:
+    """The listings file a scope names."""
+    return root / "data" / str(scope["id"]) / str(scope["data"]["file"])
+
+
+def model_path(scope: dict[str, Any], root: Path = ROOT) -> Path:
+    """Where a scope's model is written: model/<id>/model.json, with model.js beside it."""
+    return root / "model" / str(scope["id"]) / "model.json"
+
+
+def scope_index(models: Path) -> list[dict[str, Any]]:
+    """Each trained scope under `models` (<id>/model.json): its id, name and location names.
+
+    The page searches every city's locations from this one list, so it is small: names
+    only; a city's weights load when one of its locations is chosen.
+    """
+    found = [json.loads(path.read_text(encoding="utf-8")) for path in models.glob("*/model.json")]
+    index = [
+        {
+            "id": m["scope"]["id"],
+            "name": m["scope"]["name"],
+            "locations": sorted((n for n in m["locations"] if n != OTHER), key=str.casefold),
+        }
+        for m in found
+    ]
+    return sorted(index, key=lambda s: str(s["name"]))
+
+
+def export(trained: Trained, scope: dict[str, Any], data_sha256: str) -> dict[str, Any]:
+    """Everything a prediction needs, its bounds, its scope, and where it came from."""
+    model, rows = trained.model, trained.rows
+    weights = dict(zip(trained.columns, (float(c) for c in model.coef_), strict=True))
+    unit = f"{scope['price_unit']} {scope['currency']}"
+    return {
+        "scope": scope,
+        "intercept": float(model.intercept_),
+        "target": f"log(price in {unit})",
+        "coefficients": {
+            "log_total_sqft": weights.pop("total_sqft"),
+            "bath": weights.pop("bath"),
+            "bhk": weights.pop("bhk"),
+        },
+        "locations": {OTHER: 0.0, **weights},
+        "unit": unit,
+        "bounds": {
+            "min_sqft_per_bhk": MIN_SQFT_PER_BHK,
+            "max_sqft_by_bhk": {
+                str(bhk): float(most)
+                for bhk, most in rows.groupby("bhk")["total_sqft"].max().items()
+            },
+            "max_extra_bath": MAX_EXTRA_BATH,
+        },
+        "scores": trained.scores,
+        "data_sha256": data_sha256,
+        "trained_with": {
+            "python": platform.python_version(),
+            "scikit-learn": sklearn.__version__,
+            "pandas": pd.__version__,
+            "numpy": np.__version__,
+        },
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Train, then write the weights as JSON and as a script the page loads."""
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--scope", default=DEFAULT_SCOPE, help="a folder name under data/")
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help="default: model/<scope>/model.json, which also updates model/scopes.js",
+    )
+    args = parser.parse_args(argv)
+    scope = read_scope(args.scope)
+    data, out = listings(scope), args.out or model_path(scope)
+    trained = train(clean(pd.read_csv(data)))
+    payload = export(trained, scope, hashlib.sha256(data.read_bytes()).hexdigest())
+    text = json.dumps(payload, indent=1)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(text + "\n", encoding="utf-8")
+    # The same weights as a script: browsers refuse to fetch a JSON file from disk.
+    out.with_suffix(".js").write_text(f"{BROWSER_GLOBAL} = {text};\n", encoding="utf-8")
+    if out.resolve() == model_path(scope).resolve():
+        # The page's list of cities, from every model beside this one: a new scope needs no code.
+        # A model written elsewhere (--out) is not one the page serves, so it leaves the list alone.
+        index = json.dumps(scope_index(out.parent.parent), indent=1)
+        (out.parent.parent / "scopes.js").write_text(
+            f"{SCOPES_GLOBAL} = {index};\n", encoding="utf-8"
+        )
+    ours, course = trained.scores["held_out"], trained.scores["course_method"]
+    print(
+        f"{out}: half of held-out estimates within {ours['median_abs_pct_error']:.1%} "
+        f"(course method {course['median_abs_pct_error']:.1%})"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
