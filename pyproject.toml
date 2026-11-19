@@ -1,7 +1,7 @@
 [project]
 name = "homevaluenavigator"
 version = "0.2.0"
-description = "Bengaluru home price estimates from a log-linear model, in the browser or over HTTP."
+description = "Bengaluru home asking-price estimates from a log-linear model, in the browser or over HTTP."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -42,8 +42,6 @@ module-name = "homevalue"
 [tool.ruff]
 line-length = 100
 target-version = "py311"
-# The 2024 notebook is kept as it was written; train.py is the maintained source.
-extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = [

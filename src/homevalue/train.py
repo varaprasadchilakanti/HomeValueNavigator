@@ -46,7 +46,7 @@ ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCOPE = "bengaluru"
 BROWSER_GLOBAL = "window.HOMEVALUE_MODEL"
 SCOPES_GLOBAL = "window.HOMEVALUE_SCOPES"
-#: The 2024 notebook's split and seed.
+#: The course's split and seed.
 TEST_SIZE = 0.2
 SPLIT_SEED = 10
 FOLDS = 5

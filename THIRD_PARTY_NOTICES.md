@@ -17,6 +17,12 @@ uploader's statement; who collected the listings, and when, is not recorded.
 If you hold rights in these listings and object to their redistribution, open an issue and
 the file will be removed.
 
+## Earlier versions
+
+0.1.0 included `client/Designer.png`, a background image made with Microsoft Designer's
+Image Creator, which marks it as AI-generated. It is not covered by this repository's
+license; 0.2.0 removed it.
+
 ## Method
 
 The cleaning rules and the project's starting shape follow the course. The training
