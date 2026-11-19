@@ -1,6 +1,6 @@
 [project]
 name = "homevaluenavigator"
-version = "0.2.0.dev0"
+version = "0.2.0"
 description = "Bengaluru home price estimates from a log-linear model, in the browser or over HTTP."
 readme = "README.md"
 license = "MIT"
