@@ -15,8 +15,9 @@ from homevalue import train
 
 ROOT = Path(__file__).resolve().parents[1]
 DOCS = ["README.md", "SECURITY.md", "THIRD_PARTY_NOTICES.md"]
-#: What a visitor downloads, with every model/*.js; the root index.html only redirects.
-PAGE = [ROOT / "client" / n for n in ("app.html", "app.css", "theme.js", "app.js", "favicon.svg")]
+#: What a visitor downloads, with every model/*.js.
+CLIENT = ("app.css", "theme.js", "app.js", "favicon.svg")
+PAGE = [ROOT / "index.html"] + [ROOT / "client" / n for n in CLIENT]
 PAGE_BUDGET_GZIP = 20 * 1024  # bytes, each file compressed alone and summed
 NAMED = re.compile(r"`([\w./<>*-]+)`")
 FILE = re.compile(r"\.(py|js|json|csv|md|html|css|svg|toml|lock|yml|txt|ipynb)$")
@@ -78,7 +79,7 @@ def test_the_figures_the_pages_quote_are_the_models() -> None:
     held_out = model["scores"]["held_out"]
     rows, within = held_out["rows"], held_out["median_abs_pct_error"]
     quoted = f"Tested on {rows:,} unseen listings: half of estimates fall within {within:.1%}"
-    for page in ("index.html", "client/app.html"):
+    for page in ("index.html",):
         assert read(page).count(quoted) == 2, page  # the description, then og:description
 
 

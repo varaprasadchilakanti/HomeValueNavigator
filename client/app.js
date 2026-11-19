@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: MIT
-// Estimates in the browser. model/scopes.js lists each trained city with its location
-// names; one search field covers them all, grouped by city, and choosing a location loads
-// that city's weights (model/<id>/model.js, written with model.json by
-// src/homevalue/train.py). The checks follow src/homevalue/model.py and read the same
-// bounds. Nothing is chosen for the visitor; the answers are kept after the # in the
-// address, which a browser never sends to the server, so a link or a reload shows the
-// same estimate. Text is set with textContent only.
+// Estimates in the browser, with the checks and bounds of src/homevalue/model.py.
+// Choosing a location loads its city's weights (model/<id>/model.js). Answers are kept
+// after the # in the address, which never reaches a server. Text is set with textContent.
 "use strict";
 
 const CHOICES = 5;
@@ -135,7 +131,7 @@ function failed() {
 /** A city's weights, loaded once from model/<id>/model.js; null when missing or malformed. */
 function loadScope(id) {
     return new Promise((resolve) => {
-        const script = Object.assign(document.createElement("script"), { src: `../model/${id}/model.js` });
+        const script = Object.assign(document.createElement("script"), { src: `model/${id}/model.js` });
         script.addEventListener("load", () => {
             const model = loadModel(window.HOMEVALUE_MODEL);
             resolve(model && model.scopeId === id ? model : null);
