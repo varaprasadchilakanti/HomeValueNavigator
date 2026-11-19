@@ -14,6 +14,7 @@ const DASH = "\u2013";
 const LAKH = 100000;
 const RATE_STEP = 50; // rupees; the rate is an estimate, not a quote
 const EM_DASH = "\u2014";
+const ELLIPSIS = "\u2026";
 const SCOPE_ID = /^[a-z0-9-]+$/; // a folder name; it becomes part of a script address
 
 const byId = (id) => document.getElementById(id);
@@ -100,14 +101,14 @@ function setUpTheme() {
 
 // ---------------------------------------------------------------- formatting
 
-/** 69.7 -> "Rs 70 lakh"; from 100 lakh, crore to one place. Finer would claim precision
+/** 69.7 -> "₹70 lakh"; from 100 lakh, crore to one place. Finer would claim precision
  *  the model does not have. */
 function money(lakh) {
     if (lakh >= 99.5) return `${RUPEE}${(lakh / 100).toFixed(1)} crore`;
     return `${RUPEE}${Math.round(lakh)} lakh`;
 }
 
-/** "Rs 56 - 83 lakh", or both units in full when they differ. */
+/** "₹56 – 83 lakh", or both units in full when they differ. */
 function span(low, high) {
     const [a, b] = [money(low), money(high)];
     const [aNumber, aUnit] = a.split(" ");
@@ -259,6 +260,8 @@ function main(scopes) {
         // The place counts only while the field still names it; a half-typed edit does not.
         const here = byKey.get(key(location.value)) === chosen ? chosen : null;
         const model = here ? ready() : null;
+        const lost = here && models.get(here.scope) === null
+            ? `${here.city}'s model did not load. Try reloading the page.` : null;
         const sqft = parseArea(byId("sqft").value);
         const [bhk, bath] = [picked("bhk"), picked("bath")];
         document.querySelectorAll(".segments input").forEach((input) => { input.dataset.was = String(input.checked); });
@@ -266,15 +269,16 @@ function main(scopes) {
         const area = areaProblem(model, sqft, bhk);
         const sqftBox = byId("sqft");
         setError("sqft", touched.sqft && (sqftBox.value.trim() || sqftBox.validity.badInput) ? area : null);
-        setError("location", touched.location && typed.trim() && !byKey.get(key(typed))
-            ? "Choose a location from the list." : null);
+        setError("location", lost ?? (touched.location && typed.trim() && !byKey.get(key(typed))
+            ? "Choose a location from the list." : null));
         remember(here, sqft, bhk, bath);
         byId("accuracy").textContent = model ? `Tested on ${model.tested.toLocaleString("en-IN")} ${chosen.city} `
-            + `listings it had not seen, half of its estimates were within ${Math.round(model.within * 100)}% `
+            + `listings it had not seen: half of its estimates were within ${Math.round(model.within * 100)}% `
             + "of the asking price. The typical range is that band; the other half fall outside it." : "";
+        if (lost) return show(EM_DASH, lost, "");
         const gaps = missing(here, sqft, bhk, bath);
         if (gaps) return show(EM_DASH, `Choose ${gaps} to see an estimate.`, "");
-        if (!model) return show(EM_DASH, `Loading ${chosen.city}${EM_DASH}`, "");
+        if (!model) return show(EM_DASH, `Loading ${chosen.city}'s model${ELLIPSIS}`, "");
         if (area) return show(EM_DASH, "Correct the area to see an estimate.", "");
         const price = model.estimate(sqft, bhk, bath, chosen.name);
         const low = price * (1 - model.within);
@@ -292,7 +296,6 @@ function main(scopes) {
         if (!models.has(place.scope)) {
             models.set(place.scope, loadScope(place.scope).then((model) => {
                 models.set(place.scope, model);
-                if (!model) setError("location", `${place.city}'s model did not load. Try reloading the page.`);
                 limitChoices();
                 update();
             }));
@@ -371,13 +374,14 @@ function main(scopes) {
         const groups = cities.map((s) => group(s, filtering ? q : ""));
         list.replaceChildren(...(found.length === 0 ? [noMatch()] : shown[0] === null ? [clearOption(), ...groups] : groups));
         setOpen(true);
+        highlight(-1);
     }
 
     function highlight(index) {
         list.querySelector('[aria-selected="true"]')?.setAttribute("aria-selected", "false");
         active = index;
         const item = byId(`location-option-${index}`);
-        if (!item) return;
+        if (!item) { location.removeAttribute("aria-activedescendant"); return; }
         item.setAttribute("aria-selected", "true");
         location.setAttribute("aria-activedescendant", item.id);
         item.scrollIntoView({ block: "nearest" });
@@ -400,10 +404,12 @@ function main(scopes) {
 
     function onKey(e) {
         const open = !list.hidden;
-        if (e.key === "ArrowDown" && (e.altKey || !open)) { e.preventDefault(); openList(); return; }
-        if ((e.key === "ArrowDown" || e.key === "ArrowUp") && shown.length > 0) {
+        const arrow = e.key === "ArrowDown" ? 1 : e.key === "ArrowUp" ? -1 : 0;
+        if (arrow && (e.altKey || !open)) { e.preventDefault(); openList(); return; }
+        if (arrow && shown.length > 0) {
             e.preventDefault();
-            highlight((active + (e.key === "ArrowDown" ? 1 : -1) + shown.length) % shown.length);
+            const n = shown.length;
+            highlight(active < 0 ? (arrow > 0 ? 0 : n - 1) : (active + arrow + n) % n);
         } else if (e.key === "Enter" && open && shown.length > 0) {
             e.preventDefault();
             pick(active >= 0 ? shown[active] : shown.find((p) => p)); // unhighlighted, the first place
