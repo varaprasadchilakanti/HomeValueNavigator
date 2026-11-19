@@ -97,7 +97,12 @@ def _model() -> PriceModel:
 
 
 def _http_error(error: HTTPException) -> Response:
-    return problem(error.code or 500, error.description or "")
+    response = problem(error.code or 500, error.description or "")
+    # A 405 must say which methods the path takes (RFC 9110, section 15.5.6).
+    for name, value in error.get_headers():
+        if name == "Allow":
+            response.headers[name] = value
+    return response
 
 
 def _server_fault(error: Exception) -> Response:

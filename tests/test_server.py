@@ -81,6 +81,13 @@ def test_an_unknown_path_is_a_404_problem_not_an_html_page(client: FlaskClient) 
     assert response.mimetype == "application/problem+json"
 
 
+def test_a_wrong_method_is_a_405_naming_the_allowed_ones(client: FlaskClient) -> None:
+    response = client.get("/api/predict")
+    assert response.status_code == 405
+    assert response.content_type == "application/problem+json"
+    assert "POST" in response.headers["Allow"]
+
+
 def test_a_body_without_a_length_is_a_411(client: FlaskClient) -> None:
     """A chunked body has no length to check against the limit, so it is refused."""
     response = client.post(
