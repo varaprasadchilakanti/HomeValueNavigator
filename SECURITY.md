@@ -10,6 +10,8 @@ time is promised.
 | 0.2.x, and the latest commit on `main` | yes |
 | 0.1.0 and anything older | no |
 
-The page runs entirely in the browser and sends nothing it is given. GitHub Pages, which
+The page runs entirely in the browser and sends nothing it is given. It keeps the answers
+after the `#` in the address, which browsers do not send to the server; a link someone
+copies carries them. GitHub Pages, which
 serves it, keeps its own access logs, as any web host does. The API reads one local JSON
 file and stores nothing.

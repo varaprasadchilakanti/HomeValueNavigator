@@ -3,8 +3,9 @@
 // names; one search field covers them all, grouped by city, and choosing a location loads
 // that city's weights (model/<id>/model.js, written with model.json by
 // src/homevalue/train.py). The checks follow src/homevalue/model.py and read the same
-// bounds. Nothing is chosen for the visitor; the answers are kept in the address, so a
-// link or a reload shows the same estimate. Text is set with textContent only.
+// bounds. Nothing is chosen for the visitor; the answers are kept after the # in the
+// address, which a browser never sends to the server, so a link or a reload shows the
+// same estimate. Text is set with textContent only.
 "use strict";
 
 const CHOICES = 5;
@@ -252,7 +253,7 @@ function main(scopes) {
         if (Number.isFinite(sqft)) query.set("sqft", String(sqft));
         const text = query.toString();
         try {
-            history.replaceState(null, "", text ? `?${text}` : window.location.pathname);
+            history.replaceState(null, "", `${window.location.pathname}${text ? `#${text}` : ""}`);
         } catch { /* a page opened from disk may refuse; the estimate still shows */ }
     }
 
@@ -457,7 +458,7 @@ function main(scopes) {
     byId("form").addEventListener("submit", (e) => e.preventDefault());
     byId("cities").textContent = scopes.map((s) => s.name).join(", ");
 
-    const asked = new URLSearchParams(window.location.search);
+    const asked = new URLSearchParams(window.location.hash.slice(1));
     for (const name of ["bhk", "bath"]) {
         const input = byId(`${name}-${asked.get(name)}`);
         if (input?.name === name) input.checked = true;

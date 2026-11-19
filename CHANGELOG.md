@@ -20,7 +20,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Light, dark and system themes, one location search across every city grouped by city,
   accessible errors, the price per sq ft and a favicon.
 - Nothing is chosen for the visitor, and a chosen location or count can be cleared; the
-  answers are kept in the address, so a reload or a link shows the same estimate.
+  answers are kept after the `#` in the address, which is never sent to the server, so a
+  reload or a link shows the same estimate.
 - waitress, to serve the API in production.
 - Tests, type checks, a 90% coverage floor, CI and `scripts/measure.py`.
 - Tests that the paths and version the documents state, and the figures in the pages'
@@ -56,9 +57,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 
 ## [0.1.0] - 2024-12-17
 
-The course project: pickled model, Flask server, jQuery page. Its notebook, which reproduced
-the course's code, was taken out of the history in 2026; the course's own is linked from the
-README.
+The course project: pickled model, Flask server, jQuery page. The notebook it followed is the
+course's own, linked from the README.
 
 [Unreleased]: https://github.com/varaprasadchilakanti/HomeValueNavigator/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/varaprasadchilakanti/HomeValueNavigator/compare/v0.1.0...v0.2.0

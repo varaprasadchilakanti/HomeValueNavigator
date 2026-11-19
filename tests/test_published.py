@@ -18,13 +18,13 @@ ROOT = Path(__file__).resolve().parents[1]
 DOCS = ["README.md", "CONTRIBUTING.md", "SECURITY.md", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md"]
 #: What a visitor downloads, with every model/*.js; the root index.html only redirects.
 PAGE = [ROOT / "client" / n for n in ("app.html", "app.css", "theme.js", "app.js", "favicon.svg")]
-PAGE_BUDGET_GZIP = 20 * 1024  # bytes, each file compressed alone; about 17.9 KiB on 2026-11-19
+PAGE_BUDGET_GZIP = 20 * 1024  # bytes, each file compressed alone; the README counts one stream
 NAMED = re.compile(r"`([\w./<>*-]+)`")
 FILE = re.compile(r"\.(py|js|json|csv|md|html|css|svg|toml|lock|yml|txt|ipynb)$")
 #: Names of files not in this repository: removed ones, and the course's own.
 ELSEWHERE = {
     "CHANGELOG.md": {"requirements.txt"},
-    "THIRD_PARTY_NOTICES.md": {"bengaluru_house_prices.csv"},
+    "THIRD_PARTY_NOTICES.md": {"bengaluru_house_prices.csv", "client/Designer.png"},
 }
 LINK = re.compile(r"\]\((?!https?:|#)([^)#]+)")
 RELEASE = re.compile(r"^## \[(\d+\.\d+\.\d+)\] - \d{4}-\d{2}-\d{2}$", re.MULTILINE)
@@ -95,6 +95,13 @@ def test_the_figures_the_pages_quote_are_the_models() -> None:
     quoted = f"Tested on {rows:,} unseen listings: half of estimates fall within {within:.1%}"
     for page in ("index.html", "client/app.html"):
         assert read(page).count(quoted) == 2, page  # the description, then og:description
+
+
+def test_the_page_keeps_answers_out_of_what_it_sends() -> None:
+    """Answers live after the # in the address: a query string would reach the server's logs."""
+    page = read("client/app.js")
+    assert "location.search" not in page
+    assert "window.location.hash" in page
 
 
 def test_the_page_stays_within_its_budget() -> None:
